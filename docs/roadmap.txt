@@ -1,0 +1,3 @@
+v0.01
+goal: get all roles established and basic SH powers working, and get chats working with claims
+
