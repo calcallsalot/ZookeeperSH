@@ -1,20 +1,24 @@
-import Image from "next/image";
-
-export default function Boards() {
+export default function Home() {
   return (
-    <div>
-      <Image
-        src="/images/cards/liberal_board.png"
-        alt="Fascist board"
-        width={650}
-        height={442}
-      />
-      <Image
-        src="/images/cards/fascist_board.png"
-        alt="Liberal board"
-        width={650}
-        height={442}
-      />
-    </div>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "black",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      <h1
+        style={{
+          color: "white",
+          margin: 0,
+          fontSize: "clamp(56px, 10vw, 120px)",
+          fontFamily: "var(--font-eskapade-fraktur)",
+          letterSpacing: "0.02em",
+        }}
+      >
+        ZooKeeperSH
+      </h1>
+    </main>
   );
 }
