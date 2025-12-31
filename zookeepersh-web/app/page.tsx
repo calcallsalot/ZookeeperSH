@@ -9,7 +9,7 @@ type UserInfo = {
 
 type ModalKind = null | "login" | "signup";
 
-function Modal({
+/*function Modal({
   open,
   title,
   onClose,
@@ -94,7 +94,133 @@ function Modal({
       </div>
     </div>
   );
+}*/
+function Modal({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // when closing, reset so next open animates again
+    if (!open) {
+      setMounted(false);
+      return;
+    }
+
+    // when opening, start "closed" then animate to "open"
+    setMounted(false);
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => setMounted(true));
+      // cleanup inner RAF too
+      (window as any).__raf2 = raf2;
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      const raf2 = (window as any).__raf2;
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [open]);
+
+  // ESC closes
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.55)",
+        display: "grid",
+        placeItems: "center",
+        padding: 16,
+
+        // needed for 3D rotateY to look right
+        perspective: "1200px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(520px, 94vw)",
+          borderRadius: 16,
+          background: "#111",
+          color: "white",
+          border: "1px solid rgba(255,255,255,0.10)",
+          boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+          padding: 18,
+          fontFamily: "var(--font-comfortaa)",
+
+          // horizontal spin (flip) animation
+          transform: mounted
+            ? "translateY(0) rotateY(0deg) scale(1)"
+            : "translateY(10px) rotateY(85deg) scale(0.96)",
+          opacity: mounted ? 1 : 0,
+          transition:
+            "transform 1000ms cubic-bezier(0.2, 0.9, 0.2, 1), opacity 220ms ease",
+          transformOrigin: "50% 50%", // change to "0% 50%" for hinge-from-left
+          backfaceVisibility: "hidden",
+          willChange: "transform, opacity",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontWeight: 900, fontSize: 18 }}>{title}</div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "white",
+              cursor: "pointer",
+              fontSize: 22,
+              lineHeight: 1,
+              padding: 6,
+              borderRadius: 10,
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
 }
+
 
 function AuthButtons({
   userInfo,
