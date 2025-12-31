@@ -20,7 +20,6 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  // ESC closes
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -37,7 +36,7 @@ function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={onClose} // backdrop click closes
+      onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,
@@ -49,7 +48,7 @@ function Modal({
       }}
     >
       <div
-        onClick={(e) => e.stopPropagation()} // keep modal open if clicking inside
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(520px, 94vw)",
           borderRadius: 16,
@@ -120,58 +119,71 @@ function AuthButtons({
   };
 
   return !userInfo.userName ? (
-    <div style={{ display: "flex", alignItems: "center" }}>
+    <div
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+    >
+      {/* LEFT: Log in */}
       <button
         type="button"
         id="signin"
         onClick={onOpenLogin}
         style={{
           ...btnStyle,
-          borderTopLeftRadius: 12,
-          borderBottomLeftRadius: 12,
+          borderTopLeftRadius: 999,
+          borderBottomLeftRadius: 999,
           borderTopRightRadius: 0,
           borderBottomRightRadius: 0,
+          paddingRight: 18,
         }}
       >
         Log in
       </button>
 
-      {/* OR circle separator */}
-      <div
-        aria-hidden="true"
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: "999px",
-          background: "white",
-          color: "black",
-          display: "grid",
-          placeItems: "center",
-          margin: "0 -8px", // overlap slightly so buttons feel connected
-          fontFamily: "var(--font-comfortaa)",
-          fontSize: 12,
-          fontWeight: 900,
-          border: "2px solid #231a18",
-          zIndex: 1,
-        }}
-      >
-        OR
-      </div>
-
+      {/* RIGHT: Sign up */}
       <button
         type="button"
         id="signup"
         onClick={onOpenSignup}
         style={{
           ...btnStyle,
-          borderTopRightRadius: 12,
-          borderBottomRightRadius: 12,
+          borderTopRightRadius: 999,
+          borderBottomRightRadius: 999,
           borderTopLeftRadius: 0,
           borderBottomLeftRadius: 0,
+          paddingLeft: 18,
         }}
       >
         Sign up
       </button>
+
+      {/* OR circle separator */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: "47%",
+          transform: "translateX(-50%)",
+          width: 30,
+          height: 30,
+          borderRadius: 999,
+          background: "white",
+          color: "black",
+          display: "grid",
+          placeItems: "center",
+          fontFamily: "var(--font-comfortaa)",
+          fontSize: 12,
+          fontWeight: 900,
+          border: "2px solid #231a18",
+          zIndex: 2,
+          pointerEvents: "none",
+        }}
+      >
+        OR
+      </div>
     </div>
   ) : (
     <Link
@@ -195,7 +207,6 @@ function AuthButtons({
 
 export default function Home() {
   const userInfo: UserInfo = { userName: null };
-
   const [modal, setModal] = useState<ModalKind>(null);
 
   const links = [
@@ -314,10 +325,12 @@ export default function Home() {
       </main>
 
       {/* Login Modal */}
-      <Modal open={modal === "login"} title="Log in" onClose={() => setModal(null)}>
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Temporary login popup (we’ll wire real auth later).
-        </p>
+      <Modal
+        open={modal === "login"}
+        title="Log in"
+        onClose={() => setModal(null)}
+      >
+
 
         <div style={{ display: "grid", gap: 10 }}>
           <input
@@ -355,7 +368,7 @@ export default function Home() {
               fontWeight: 800,
             }}
           >
-            Continue
+            Log In
           </button>
         </div>
       </Modal>
@@ -366,11 +379,19 @@ export default function Home() {
         title="Sign up"
         onClose={() => setModal(null)}
       >
-        <p style={{ marginTop: 0, opacity: 0.85 }}>
-          Temporary signup popup (we’ll wire real auth later).
-        </p>
 
         <div style={{ display: "grid", gap: 10 }}>
+          <input
+            placeholder="Email"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "#0b0b0b",
+              color: "white",
+              outline: "none",
+            }}
+          />
           <input
             placeholder="Username"
             style={{
@@ -383,7 +404,18 @@ export default function Home() {
             }}
           />
           <input
-            placeholder="Email"
+            placeholder="Password"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "#0b0b0b",
+              color: "white",
+              outline: "none",
+            }}
+          />
+          <input
+            placeholder="Confirm Password"
             style={{
               padding: "10px 12px",
               borderRadius: 12,
