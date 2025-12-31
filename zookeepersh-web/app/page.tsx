@@ -210,7 +210,7 @@ export default function Home() {
   const [modal, setModal] = useState<ModalKind>(null);
 
   const links = [
-    { label: "Game Lobby", href: "/games" },
+    // { label: "Game Lobby", href: "/games" },
     { label: "Home", href: "/" },
     { label: "Rules", href: "/rules" },
     { label: "How to Play", href: "/how-to-play" },
@@ -266,14 +266,49 @@ export default function Home() {
               fontWeight: 600,
             }}
           >
+            <Link
+              href="/games"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "15px 20px",
+                borderRadius: 12,
+                backgroundColor: "black",
+                color: "white",
+                textDecoration: "none",
+                fontFamily: "var(--font-comfortaa)",
+                fontSize: 14,
+                fontWeight: 800,
+                lineHeight: 1,
+              }}
+            >
+              Game Lobby
+            </Link>
+
             {links.map((l) => {
               const isExternal = l.href.startsWith("http");
-              const commonStyle: React.CSSProperties = {
+              const isGameLobby = l.href === "/games";
+              const gameBtnStyle: React.CSSProperties = {
+                display: "inline-block",
+                padding: "10px 14px",
+                borderRadius: 999,
+                background: "black",
+                color: "white",
+                textDecoration: "none",
+                fontFamily: "var(--font-comfortaa)",
+                fontSize: 14,
+                fontWeight: 800,
+                lineHeight: 1,
+                border: "2px solid rgba(0,0,0,0.35)", 
+              };
+              const commonStyle: React.CSSProperties = { // normal nav
                 color: "black",
                 textDecoration: "none",
                 padding: "8px 10px",
                 borderRadius: 10,
               };
+
+              const style = isGameLobby ? gameBtnStyle : commonStyle;
 
               return isExternal ? (
                 <a
