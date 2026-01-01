@@ -341,9 +341,9 @@ export default function Home() {
     { label: "Rules", href: "/rules" },
     { label: "How to Play", href: "/how-to-play" },
     { label: "Roles", href: "/roles" },
-    { label: "Discord", href: "https://discord.com" },
+    { label: "Discord", href: "" },
     { label: "Wiki", href: "/wiki" },
-    { label: "Github", href: "https://github.com" },
+    { label: "Github", href: "https://github.com/calcallsalot/ZookeeperSH" },
   ];
 
   return (
@@ -367,8 +367,8 @@ export default function Home() {
             gap: 16,
           }}
         >
-          <Link
-            href="/"
+          <div // can be changed to <link> at any time by adding href
+            //href="/"
             style={{
               fontFamily: "var(--font-eskapade-fraktur)",
               fontSize: 28,
@@ -379,7 +379,7 @@ export default function Home() {
             }}
           >
             ZooKeeperSH
-          </Link>
+          </div>
 
           <div
             style={{
