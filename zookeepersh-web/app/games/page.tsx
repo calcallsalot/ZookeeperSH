@@ -1,14 +1,19 @@
-// ./games/gameLobby.tsx
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function GameLobby() {
-  const userName = "userName"; // TODO: replace with real user
+  const router = useRouter();
+  const { data: session, status } = useSession();
+
+
+  const userName =
+    session?.user?.name;
 
   return (
     <div style={{ minHeight: "100vh", background: "#141414" }}>
-      {/* Top headline bar */}
       <header
         style={{
           position: "sticky",
@@ -47,7 +52,7 @@ export default function GameLobby() {
               whiteSpace: "nowrap",
             }}
           >
-            {userName}
+            {status === "loading" ? "Loading..." : userName}
           </span>
 
           <button
@@ -63,13 +68,10 @@ export default function GameLobby() {
               background: "white",
               display: "grid",
               placeItems: "center",
-              //justifyContent: "center",
               cursor: "pointer",
             }}
-            onClick={() => console.log("settings clicked")}
+            onClick={() => router.push("/settings")}
           >
-
-            {/* Rotating gear */}
             <svg
               className="zk-gear"
               width="18"
@@ -79,16 +81,7 @@ export default function GameLobby() {
               xmlns="http://www.w3.org/2000/svg"
               aria-hidden="true"
             >
-              {/* inner circle: centered */}
-              <circle
-                cx="12"
-                cy="12"
-                r="3.5"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-
-              {/* outer gear shifted up */}
+              <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="2" />
               <g transform="translate(0 -3)">
                 <path
                   d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.6-2-3.4-2.5 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.1l-.4 2.6a7.5 7.5 0 0 0-1.7 1l-2.5-1-2 3.4 2 1.6a7.9 7.9 0 0 0 .1 1 7.9 7.9 0 0 0-.1 1l-2 1.6 2 3.4 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h5.8l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.4-2-1.6a7.9 7.9 0 0 0-.1-1Z"
@@ -99,21 +92,12 @@ export default function GameLobby() {
                 />
               </g>
             </svg>
-
-
           </button>
         </div>
       </header>
 
-      {/* Page content placeholder */}
       <main style={{ padding: 18 }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-comfortaa)",
-            fontSize: 18,
-            margin: 0,
-          }}
-        >
+        <h1 style={{ fontFamily: "var(--font-comfortaa)", fontSize: 18, margin: 0 }}>
           Game Lobby
         </h1>
         <p style={{ fontFamily: "var(--font-comfortaa)", opacity: 0.75 }}>
@@ -121,24 +105,17 @@ export default function GameLobby() {
         </p>
       </main>
 
-      {/* Local CSS for gear animation */}
       <style jsx>{`
         .zk-gear {
           color: #231a18;
           transform-origin: 50% 50%;
         }
-
         .zk-gearBtn:hover .zk-gear {
           animation: zk-spin 1.2s linear infinite;
         }
-
         @keyframes zk-spin {
-          from {
-            transform: rotate(0deg);
-          }   
-          to {
-            transform: rotate(360deg);
-          }
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>
