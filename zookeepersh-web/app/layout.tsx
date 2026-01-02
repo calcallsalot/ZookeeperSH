@@ -3,13 +3,13 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import localFont from "next/font/local";
 import { Comfortaa } from "next/font/google";
+import Providers from "./providers"; 
 
 const comfortaa = Comfortaa({
   subsets: ["latin"],
   variable: "--font-comfortaa",
   display: "swap",
 });
-
 
 const eskapadeFraktur = localFont({
   src: "../public/fonts/EskapadeFraktur-Black.woff2",
@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${comfortaa.variable} ${eskapadeFraktur.variable} antialiased`}>
-        {children}
+        <Providers>{children}</Providers> 
       </body>
     </html>
   );

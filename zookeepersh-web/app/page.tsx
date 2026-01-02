@@ -1,5 +1,6 @@
 "use client";
 
+import { signIn, signOut, useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -9,92 +10,6 @@ type UserInfo = {
 
 type ModalKind = null | "login" | "signup";
 
-/*function Modal({
-  open,
-  title,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        background: "rgba(0,0,0,0.55)",
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "min(520px, 94vw)",
-          borderRadius: 16,
-          background: "#111",
-          color: "white",
-          border: "1px solid rgba(255,255,255,0.10)",
-          boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
-          padding: 18,
-          fontFamily: "var(--font-comfortaa)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: 18 }}>{title}</div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              border: "none",
-              background: "transparent",
-              color: "white",
-              cursor: "pointer",
-              fontSize: 22,
-              lineHeight: 1,
-              padding: 6,
-              borderRadius: 10,
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        {children}
-      </div>
-    </div>
-  );
-}*/
 function Modal({
   open,
   title,
@@ -109,17 +24,14 @@ function Modal({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // when closing, reset so next open animates again
     if (!open) {
       setMounted(false);
       return;
     }
 
-    // when opening, start "closed" then animate to "open"
     setMounted(false);
     const raf1 = requestAnimationFrame(() => {
       const raf2 = requestAnimationFrame(() => setMounted(true));
-      // cleanup inner RAF too
       (window as any).__raf2 = raf2;
     });
 
@@ -147,7 +59,10 @@ function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={onClose}
+      onMouseDown={(e) => {
+        // only close when the backdrop itself is clicked
+        if (e.target === e.currentTarget) onClose();
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -156,8 +71,6 @@ function Modal({
         display: "grid",
         placeItems: "center",
         padding: 16,
-
-        // needed for 3D rotateY to look right
         perspective: "1200px",
       }}
     >
@@ -173,14 +86,13 @@ function Modal({
           padding: 18,
           fontFamily: "var(--font-comfortaa)",
 
-          // horizontal spin (flip) animation
           transform: mounted
             ? "translateY(0) rotateY(0deg) scale(1)"
             : "translateY(10px) rotateY(85deg) scale(0.96)",
           opacity: mounted ? 1 : 0,
           transition:
             "transform 1000ms cubic-bezier(0.2, 0.9, 0.2, 1), opacity 220ms ease",
-          transformOrigin: "50% 50%", // change to "0% 50%" for hinge-from-left
+          transformOrigin: "50% 50%",
           backfaceVisibility: "hidden",
           willChange: "transform, opacity",
         }}
@@ -221,7 +133,6 @@ function Modal({
   );
 }
 
-
 function AuthButtons({
   userInfo,
   onOpenLogin,
@@ -250,9 +161,9 @@ function AuthButtons({
         position: "relative",
         display: "inline-flex",
         alignItems: "center",
+        flex: "0 0 auto",
       }}
     >
-      {/* LEFT: Log in */}
       <button
         type="button"
         id="signin"
@@ -269,7 +180,6 @@ function AuthButtons({
         Log in
       </button>
 
-      {/* RIGHT: Sign up */}
       <button
         type="button"
         id="signup"
@@ -286,7 +196,6 @@ function AuthButtons({
         Sign up
       </button>
 
-      {/* OR circle separator */}
       <div
         aria-hidden="true"
         style={{
@@ -315,7 +224,8 @@ function AuthButtons({
     <Link
       href="/account"
       style={{
-        display: "inline-block",
+        display: "inline-flex",
+        alignItems: "center",
         padding: "10px 14px",
         borderRadius: 12,
         background: "#231a18",
@@ -324,6 +234,10 @@ function AuthButtons({
         fontFamily: "var(--font-comfortaa)",
         fontWeight: 700,
         whiteSpace: "nowrap",
+        maxWidth: 180,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        flex: "0 0 auto",
       }}
     >
       {userInfo.userName}&apos;s account
@@ -332,11 +246,133 @@ function AuthButtons({
 }
 
 export default function Home() {
-  const userInfo: UserInfo = { userName: null };
+  const { data: session } = useSession();
+
+  const userInfo: UserInfo = {
+    userName: session?.user?.name ?? session?.user?.email ?? null,
+  };
+
   const [modal, setModal] = useState<ModalKind>(null);
 
+  // login state
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  // signup state
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupUsername, setSignupUsername] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirm, setSignupConfirm] = useState("");
+
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  async function handleLogin() {
+    setAuthError(null);
+    setAuthLoading(true);
+    try {
+      const res = await signIn("credentials", {
+        email: loginEmail,
+        password: loginPassword,
+        redirect: false,
+      });
+
+      if (!res || res.error) {
+        setAuthError("Invalid email or password.");
+        return;
+      }
+
+      setModal(null);
+      setLoginPassword("");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleSignup() {
+    setAuthError(null);
+
+    if (signupPassword.length < 8) {
+      setAuthError("Password must be at least 8 characters.");
+      return;
+    }
+    if (signupPassword !== signupConfirm) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const r = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: signupEmail,
+          password: signupPassword,
+          name: signupUsername,
+        }),
+      });
+
+      const data = await r.json();
+      if (!r.ok) {
+        setAuthError(data?.error ?? "Could not create account.");
+        return;
+      }
+
+      const res = await signIn("credentials", {
+        email: signupEmail,
+        password: signupPassword,
+        redirect: false,
+      });
+
+      if (!res || res.error) {
+        setAuthError("Account created, but login failed. Try logging in.");
+        return;
+      }
+
+      setModal(null);
+      setSignupPassword("");
+      setSignupConfirm("");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  const gameLobbyNavBtn: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "15px 20px",
+    borderRadius: 12,
+    backgroundColor: "black",
+    color: "white",
+    textDecoration: "none",
+    fontFamily: "var(--font-comfortaa)",
+    fontSize: 14,
+    fontWeight: 800,
+    lineHeight: 1,
+    border: "none",
+    cursor: "pointer",
+    flex: "0 0 auto",
+    whiteSpace: "nowrap",
+  };
+  const primaryNavBtn: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "15px 20px",
+    borderRadius: 12,
+    backgroundColor: "#231a18",
+    color: "white",
+    textDecoration: "none",
+    fontFamily: "var(--font-comfortaa)",
+    fontSize: 14,
+    fontWeight: 800,
+    lineHeight: 1,
+    border: "none",
+    cursor: "pointer",
+    flex: "0 0 auto",
+    whiteSpace: "nowrap",
+  };
   const links = [
-    // { label: "Game Lobby", href: "/games" },
     { label: "Home", href: "/" },
     { label: "Rules", href: "/rules" },
     { label: "How to Play", href: "/how-to-play" },
@@ -357,109 +393,114 @@ export default function Home() {
           borderBottom: "1px solid rgba(0,0,0,0.12)",
         }}
       >
+        {/* NAVBAR: grid layout that never wraps */}
         <nav
           style={{
-            maxWidth: 1200,
+            maxWidth: 2000,
             margin: "0 auto",
             padding: "10px 16px",
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: "auto 1fr auto",
             alignItems: "center",
-            gap: 16,
+            columnGap: 16,
           }}
         >
-          <div // can be changed to <link> at any time by adding href
-            //href="/"
+          {/* LEFT: logo */}
+          <div
             style={{
               fontFamily: "var(--font-eskapade-fraktur)",
               fontSize: 28,
               color: "black",
-              textDecoration: "none",
-              marginRight: 12,
               whiteSpace: "nowrap",
             }}
           >
             ZooKeeperSH
           </div>
 
+          {/* MIDDLE: links */}
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                minWidth: 0,
+                flexWrap: "nowrap",
+                overflowX: "auto",
+                overflowY: "hidden",
+                whiteSpace: "nowrap",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <Link href="/games" style={gameLobbyNavBtn}>
+                Game Lobby
+              </Link>
+
+              {links.map((l) => {
+                const isExternal = l.href.startsWith("http");
+                const commonStyle: React.CSSProperties = {
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontFamily: "var(--font-comfortaa)",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color: "black",
+                  textDecoration: "none",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  whiteSpace: "nowrap",
+                  flex: "0 0 auto",
+                };
+
+                return isExternal ? (
+                  <a
+                    key={l.label}
+                    href={l.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={commonStyle}
+                  >
+                    {l.label}
+                  </a>
+                ) : (
+                  <Link key={l.label} href={l.href} style={commonStyle}>
+                    {l.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+
+          {/* RIGHT: auth (pinned right; never wraps) */}
           <div
             style={{
               display: "flex",
-              gap: 14,
-              flexWrap: "wrap",
+              gap: 10,
               alignItems: "center",
-              fontFamily: "var(--font-comfortaa)",
-              fontSize: 16,
-              fontWeight: 600,
+              justifySelf: "end",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
             }}
           >
-            <Link
-              href="/games"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "15px 20px",
-                borderRadius: 12,
-                backgroundColor: "black",
-                color: "white",
-                textDecoration: "none",
-                fontFamily: "var(--font-comfortaa)",
-                fontSize: 14,
-                fontWeight: 800,
-                lineHeight: 1,
-              }}
-            >
-              Game Lobby
-            </Link>
-
-            {links.map((l) => {
-              const isExternal = l.href.startsWith("http");
-              const isGameLobby = l.href === "/games";
-              const gameBtnStyle: React.CSSProperties = {
-                display: "inline-block",
-                padding: "10px 14px",
-                borderRadius: 999,
-                background: "black",
-                color: "white",
-                textDecoration: "none",
-                fontFamily: "var(--font-comfortaa)",
-                fontSize: 14,
-                fontWeight: 800,
-                lineHeight: 1,
-                border: "2px solid rgba(0,0,0,0.35)", 
-              };
-              const commonStyle: React.CSSProperties = { // normal nav
-                color: "black",
-                textDecoration: "none",
-                padding: "8px 10px",
-                borderRadius: 10,
-              };
-
-              const style = isGameLobby ? gameBtnStyle : commonStyle;
-
-              return isExternal ? (
-                <a
-                  key={l.label}
-                  href={l.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={commonStyle}
-                >
-                  {l.label}
-                </a>
-              ) : (
-                <Link key={l.label} href={l.href} style={commonStyle}>
-                  {l.label}
-                </Link>
-              );
-            })}
-          </div>
-
-          <div style={{ marginLeft: "auto" }}>
             <AuthButtons
               userInfo={userInfo}
-              onOpenLogin={() => setModal("login")}
-              onOpenSignup={() => setModal("signup")}
+              onOpenLogin={() => {
+                setAuthError(null);
+                setModal("login");
+              }}
+              onOpenSignup={() => {
+                setAuthError(null);
+                setModal("signup");
+              }}
             />
+
+            {session && (
+              <button onClick={() => signOut()} style={primaryNavBtn}>
+                Log Out
+              </button>
+            )}
           </div>
         </nav>
       </header>
@@ -491,11 +532,11 @@ export default function Home() {
         title="Log in"
         onClose={() => setModal(null)}
       >
-
-
         <div style={{ display: "grid", gap: 10 }}>
           <input
-            placeholder="Username / Email"
+            placeholder="Email"
+            value={loginEmail}
+            onChange={(e) => setLoginEmail(e.target.value)}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -508,6 +549,8 @@ export default function Home() {
           <input
             placeholder="Password"
             type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -517,8 +560,14 @@ export default function Home() {
               outline: "none",
             }}
           />
+
+          {authError && (
+            <div style={{ color: "#ffb4b4", fontSize: 13 }}>{authError}</div>
+          )}
+
           <button
-            onClick={() => setModal(null)}
+            onClick={handleLogin}
+            disabled={authLoading}
             style={{
               padding: "10px 12px",
               borderRadius: 999,
@@ -527,9 +576,10 @@ export default function Home() {
               background: "#231a18",
               color: "white",
               fontWeight: 800,
+              opacity: authLoading ? 0.7 : 1,
             }}
           >
-            Log In
+            {authLoading ? "Logging in..." : "Log In"}
           </button>
         </div>
       </Modal>
@@ -540,10 +590,11 @@ export default function Home() {
         title="Sign up"
         onClose={() => setModal(null)}
       >
-
         <div style={{ display: "grid", gap: 10 }}>
           <input
             placeholder="Email"
+            value={signupEmail}
+            onChange={(e) => setSignupEmail(e.target.value)}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -555,6 +606,8 @@ export default function Home() {
           />
           <input
             placeholder="Username"
+            value={signupUsername}
+            onChange={(e) => setSignupUsername(e.target.value)}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -566,6 +619,9 @@ export default function Home() {
           />
           <input
             placeholder="Password"
+            type="password"
+            value={signupPassword}
+            onChange={(e) => setSignupPassword(e.target.value)}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -577,6 +633,9 @@ export default function Home() {
           />
           <input
             placeholder="Confirm Password"
+            type="password"
+            value={signupConfirm}
+            onChange={(e) => setSignupConfirm(e.target.value)}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -586,8 +645,14 @@ export default function Home() {
               outline: "none",
             }}
           />
+
+          {authError && (
+            <div style={{ color: "#ffb4b4", fontSize: 13 }}>{authError}</div>
+          )}
+
           <button
-            onClick={() => setModal(null)}
+            onClick={handleSignup}
+            disabled={authLoading}
             style={{
               padding: "10px 12px",
               borderRadius: 999,
@@ -596,9 +661,10 @@ export default function Home() {
               background: "#231a18",
               color: "white",
               fontWeight: 800,
+              opacity: authLoading ? 0.7 : 1,
             }}
           >
-            Create account
+            {authLoading ? "Creating..." : "Create account"}
           </button>
         </div>
       </Modal>
