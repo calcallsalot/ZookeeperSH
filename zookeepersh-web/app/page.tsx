@@ -222,7 +222,7 @@ function AuthButtons({
     </div>
   ) : (
     <Link
-      href="/account"
+      href="/profile"
       style={{
         display: "inline-flex",
         alignItems: "center",
