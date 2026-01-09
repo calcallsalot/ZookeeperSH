@@ -8,6 +8,8 @@ import type { Lobby, OnlinePlayer } from "./types";
 type InitPayload = {
   lobbies?: Lobby[];
   onlinePlayers?: OnlinePlayer[];
+  /*loadingPlayers: boolean;
+  players: PlayerSummary[];*/
 };
 
 export function useLobbySocket(userName?: string) {
@@ -16,8 +18,11 @@ export function useLobbySocket(userName?: string) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  /*const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const [players, setPlayers] = useState<PlayerSummary[]>([]);*/
+
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
-  const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
+  const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]); // this might not be needed
 
   // Mount once: retain shared socket and wire listeners
   useEffect(() => {

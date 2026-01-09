@@ -12,3 +12,5 @@ export type Lobby = {
   status?: "open" | "in_game" | "closed";
   createdAt?: number;
 };
+
+

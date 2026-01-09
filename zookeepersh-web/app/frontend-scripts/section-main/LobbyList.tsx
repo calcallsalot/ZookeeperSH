@@ -9,7 +9,7 @@ export default function LobbyList() {
   if (loading) {
     return (
       <div style={{ fontFamily: "var(--font-comfortaa)", color: "rgba(255,255,255,0.70)" }}>
-        Loading lobbies…
+        Loading lobbies...
       </div>
     );
   }
