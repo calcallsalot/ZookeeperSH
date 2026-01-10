@@ -55,6 +55,9 @@ export type LobbySocketValue = {
   myName: string;
 
   createLobby: () => void;
+
+  joinLobby: (lobbyId: string) => void;
+
   sendChat: (text: string) => void;
 };
 
@@ -70,6 +73,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(true);
 
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
+
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
 
   // all chat lobby variables
@@ -128,6 +132,14 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
 
     socket.on("lobbies:update", (list: Lobby[]) => setLobbies(list));
+
+    socket.on("lobby:created", (payload: { lobbyId: string }) => {
+      console.log("[socket] lobby:created received:", payload);
+
+      // Re-fetch latest lobby list from server
+      socket.emit("init:get");
+    });
+
     socket.on("onlinePlayers:update", (list: OnlinePlayer[]) => {
       console.log("[socket] onlinePlayers:update received:", list);
       setOnlinePlayers(list);
@@ -153,11 +165,11 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     const socket = socketRef.current;
     if (!socket || !socket.connected) return;
 
-    const name =
-      session?.user?.name ?? session?.user?.email ?? "Guest";
+    const name = session?.user?.name ?? session?.user?.email ?? "Guest";
+    const authed = status === "authenticated";
 
-    socket.emit("presence:set", { name });
-    console.log("[presence:set] sent", { name, status });
+    socket.emit("presence:set", { name, authed});
+    console.log("[presence:set] sent", { name, authed });
   }, [connected, session, status]);
 
   // 3) createLobby action exposed to components
@@ -169,6 +181,17 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     }
     socket.emit("lobby:create");
   }, []);
+
+  
+  const joinLobby = useCallback((lobbyId: string) => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      console.warn("[joinLobby] socket not connected");
+      return;
+    }
+    socket.emit("lobby:join", { lobbyId });
+  }, []);
+
 
   /*const value = useMemo<LobbySocketValue>(
     () => ({
@@ -193,8 +216,9 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       chatMessages,
       canChat,
       myName,
-      sendChat,
 
+      sendChat,
+      joinLobby,
       createLobby,
     }),
     [
@@ -207,6 +231,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       canChat,
       myName,
       sendChat,
+      joinLobby,
       createLobby,
     ]
   );

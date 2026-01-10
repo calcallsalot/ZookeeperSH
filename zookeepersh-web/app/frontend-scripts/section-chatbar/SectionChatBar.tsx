@@ -36,11 +36,18 @@ export default function SectionChatBar() {
         display: "grid",
         gridTemplateRows: "auto 1fr auto",
         gap: 10,
-        minHeight: 420,
+        height: 820,
+        // height : "100%",
+        //minHeight: 0,
       }}
     >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        {/*<div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontFamily: "var(--font-comfortaa)" }}>
+          connected={String(connected)} canChat={String(canChat)} msgs={chatMessages.length} myName={String(myName)}
+        </div> 
+        // debug stuff */}
+
         <div
           style={{
             fontFamily: "var(--font-comfortaa)",
@@ -72,12 +79,13 @@ export default function SectionChatBar() {
           border: "1px solid rgba(255,255,255,0.06)",
           padding: 10,
           overflowY: "auto",
-          maxHeight: 320,
+          maxHeight: "95%",
+          minHeight: 0,
         }}
       >
         {sorted.length === 0 ? (
           <div style={{ fontFamily: "var(--font-comfortaa)", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
-            No messages yet.
+            {/* No messages yet. */}
           </div>
         ) : (
           <div style={{ display: "grid", gap: 8 }}>

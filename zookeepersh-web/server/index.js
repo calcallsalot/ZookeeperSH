@@ -37,7 +37,7 @@ async function initMongo() {
  
   await chatCol.createIndex({ createdAt: 1 }, { expireAfterSeconds: TTL_SECONDS });
 
-  await chatCol.createIndex({ createdAt: 1 });
+  //await chatCol.createIndex({ createdAt: 1 });
 
   console.log("[mongo] connected and indexes ensured");
 }
@@ -50,6 +50,11 @@ function canPlayOrChat(socket) {
 // --- In-memory presence store (socket.id -> player) ---
 const online = new Map(); // { id, name, elo }
 const onlineList = () => Array.from(online.values());
+
+// --- In-memory lobby store (lobbyId -> lobby object) ---
+const lobbies = new Map();
+const lobbyList = () => Array.from(lobbies.values());
+
 
 
 io.on("connection", (socket) => {
@@ -67,16 +72,18 @@ io.on("connection", (socket) => {
   io.emit("onlinePlayers:update", onlineList());
 
   // Client tells server who they are
-  socket.on("presence:set", ({ name, elo } = {}) => {
+  socket.on("presence:set", ({ name, elo, authed } = {}) => {
 
     const prev = online.get(socket.id) || { id: socket.id };
-    const isGuest = !null || name === "Guest";
+    //const isGuest = name === "Guest";
+    // not needed and before with !null || it was always true
 
 
     online.set(socket.id, {
       ...prev,
       name: name ?? prev.name ?? "Guest",
       elo: typeof elo === "number" ? elo : (prev.elo ?? 1600),
+      authed: !!authed,
     });
 
     io.emit("onlinePlayers:update", onlineList());
@@ -94,7 +101,7 @@ io.on("connection", (socket) => {
 
   socket.on("init:get", async () => {
     socket.emit("init", {
-      lobbies: [],
+      lobbies: lobbyList(),
       onlinePlayers: onlineList(),
     });
 
@@ -178,7 +185,28 @@ io.on("connection", (socket) => {
     const lobbyId = Math.random().toString(36).slice(2, 8).toUpperCase();
     console.log("[io] lobby:create =>", lobbyId);
 
+    // host name
+
+    const host = online.get(socket.id);
+    const hostName = host?.name ?? "Guest";
+
+    const lobby = {
+      id: lobbyId,
+      name: null,
+      hostName,
+      players: [hostName],   // client treats this as string[]
+      status: "open",
+      createdAt: Date.now(),
+    };
+
+    lobbies.set(lobbyId, lobby);
+    
+    console.log("io] created lobby:", lobby);
+
+  
     socket.emit("lobby:created", { lobbyId });
+
+    io.emit("lobbies:update", lobbyList()); // dk if this is needed it's public latest list
 
     // (Optional) if later store lobbies, you'd io.emit("lobbies:update", ...)
     // will be needed to add replays like the main site does but for rn who gaf abt replays
@@ -195,6 +223,17 @@ io.on("connection", (socket) => {
 
 app.get("/", (req, res) => res.send("socket server ok"));
 
-httpServer.listen(3001, "127.0.0.1", () => {
+initMongo()
+  .then(() => {
+    httpServer.listen(3001, "127.0.0.1", () => {
+      console.log("Socket.IO server listening on http://127.0.0.1:3001");
+    });
+  })
+  .catch((err) => {
+    console.error("[mongo] init failed:", err);
+    process.exit(1);
+  });
+
+/*httpServer.listen(3001, "127.0.0.1", () => {
   console.log("Socket.IO server listening on http://127.0.0.1:3001");
-});
+});*/
