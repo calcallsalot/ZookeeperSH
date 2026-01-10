@@ -23,13 +23,39 @@ type InitPayload = {
   onlinePlayers?: OnlinePlayer[];
 };
 
-export type LobbySocketValue = {
+/*export type LobbySocketValue = { 
   connected: boolean;
   loading: boolean;
   lobbies: Lobby[];
   onlinePlayers: OnlinePlayer[];
   loadingOnlinePlayers: boolean;
   createLobby: () => void;
+  // no chat supported here
+};*/ 
+
+// im not sure if I can just use the same chat for the game and the lobby but this is mainly for lobby 
+
+export type ChatMessage = {
+  id: string;
+  name: string;
+  text: string;
+  ts: number;
+};
+
+export type LobbySocketValue = {
+  connected: boolean;
+  loading: boolean;
+  lobbies: Lobby[];
+  onlinePlayers: OnlinePlayer[];
+  loadingOnlinePlayers: boolean;
+
+  // chat
+  chatMessages: ChatMessage[];
+  canChat: boolean;
+  myName: string;
+
+  createLobby: () => void;
+  sendChat: (text: string) => void;
 };
 
 const LobbySocketCtx = createContext<LobbySocketValue | null>(null);
