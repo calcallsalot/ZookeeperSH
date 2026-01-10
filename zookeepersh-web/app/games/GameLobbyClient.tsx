@@ -7,7 +7,7 @@ import { LobbySocketProvider } from "../frontend-scripts/components/lobby/LobbyS
 
 import SectionMain from "../frontend-scripts/section-main/SectionMain";
 import SectionRight from "../frontend-scripts/section-right/SectionRight";
-import SectionChatBar from "../frontend-scripts/section-chatbar/SectionchatBar";
+import SectionChatBar from "../frontend-scripts/section-chatbar/SectionChatBar";
 
 export default function GameLobbyClient() {
   const { data: session, status } = useSession();
@@ -30,8 +30,8 @@ export default function GameLobbyClient() {
           }}
         >
           <SectionMain />
-          <SectionChatBar />
           <SectionRight />
+          <SectionChatBar />
         </div>
 
         <style jsx global>{`

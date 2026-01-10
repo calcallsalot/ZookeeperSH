@@ -72,6 +72,18 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
 
+  // all chat lobby variables
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const myName = session?.user?.name ?? session?.user?.email ?? "Guest";
+  const canChat = status === "authenticated";
+
+  const sendChat = useCallback((text: string) => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return;
+    socket.emit("chat:send", { text });
+  }, []);
+
+
   // 1) Create socket ONCE
   useEffect(() => {
     const socket: Socket = io("http://127.0.0.1:3001", {
@@ -122,6 +134,13 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       setLoadingOnlinePlayers(false);
     });
 
+    // all chat lobby messagers handler
+    socket.on("chat:history", (msgs: ChatMessage[]) => setChatMessages(msgs ?? []));
+    socket.on("chat:message", (msg: ChatMessage) =>
+      setChatMessages((prev) => [...prev, msg])
+    );
+
+
     return () => {
       socket.off();
       socket.disconnect();
@@ -151,7 +170,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     socket.emit("lobby:create");
   }, []);
 
-  const value = useMemo<LobbySocketValue>(
+  /*const value = useMemo<LobbySocketValue>(
     () => ({
       connected,
       loading,
@@ -161,6 +180,35 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       createLobby,
     }),
     [connected, loading, lobbies, onlinePlayers, loadingOnlinePlayers,createLobby]
+    // old no chat features
+  );*/
+  const value = useMemo<LobbySocketValue>(
+    () => ({
+      connected,
+      loading,
+      lobbies,
+      onlinePlayers,
+      loadingOnlinePlayers,
+
+      chatMessages,
+      canChat,
+      myName,
+      sendChat,
+
+      createLobby,
+    }),
+    [
+      connected,
+      loading,
+      lobbies,
+      onlinePlayers,
+      loadingOnlinePlayers,
+      chatMessages,
+      canChat,
+      myName,
+      sendChat,
+      createLobby,
+    ]
   );
 
   return (
