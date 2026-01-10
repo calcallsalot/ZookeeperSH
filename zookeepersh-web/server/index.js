@@ -4,6 +4,11 @@ const { Server } = require("socket.io");
 
 const app = express();
 const httpServer = http.createServer(app);
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
+
 
 const io = new Server(httpServer, {
   cors: {
@@ -16,10 +21,8 @@ const io = new Server(httpServer, {
 
 // --- In-memory presence store (socket.id -> player) ---
 const online = new Map(); // { id, name, elo }
+const onlineList = () => Array.from(online.values());
 
-function onlineList() {
-  return Array.from(online.values());
-}
 
 io.on("connection", (socket) => {
   console.log("[io] connected:", socket.id);
@@ -32,7 +35,7 @@ io.on("connection", (socket) => {
   // Add default player presence on connect
   online.set(socket.id, { id: socket.id, name: "Guest", elo: 1600 });
 
-  // Broadcast current online list to everyone (optional but helpful)
+  // Broadcast current online list to everyone 
   io.emit("onlinePlayers:update", onlineList());
 
   // Client tells server who they are
