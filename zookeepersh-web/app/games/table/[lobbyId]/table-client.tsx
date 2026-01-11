@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import BoardView from "../../../frontend-scripts/Board/BoardView";
 import { useLobby } from "../../../frontend-scripts/components/lobby/LobbySocketContext";
 import { useSession } from "next-auth/react";
 import GameLobbyHeader from "../../../frontend-scripts/components/GameLobbyHeader";
@@ -11,6 +12,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
   const { lobbies, myLobbyId } = useLobby();
 
   const lobby = useMemo(() => lobbies.find((l) => l.id === lobbyId), [lobbies, lobbyId]);
+  const playerCount = lobby?.players?.length ?? 7;
 
   return (
     <div
@@ -23,7 +25,6 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
     >
       <GameLobbyHeader userName={userName} status={status} />
 
-      {/* Keep your existing TableClient UI below exactly as it was */}
       <div style={{ flex: 1, minHeight: 0 }}>
         <div style={{ minHeight: "100vh", background: "#141414", color: "white", padding: 18 }}>
           <div style={{ fontFamily: "var(--font-comfortaa)", fontWeight: 900, fontSize: 18 }}>
@@ -32,6 +33,10 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
       
           <div style={{ marginTop: 10, opacity: 0.8, fontFamily: "var(--font-comfortaa)" }}>
             You are in: {myLobbyId ?? "none"}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <BoardView playerCount={playerCount} />
           </div>
 
           <div style={{ marginTop: 18, fontFamily: "var(--font-comfortaa)" }}>
