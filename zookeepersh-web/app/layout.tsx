@@ -28,7 +28,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZooKeeeperSH.io",
+  title: "ZooKeeperSH.io",
   description: "Imitation of the classic Secret Hitler game",
 };
 

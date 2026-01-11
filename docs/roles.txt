@@ -1,0 +1,38 @@
+Loyalists
+
+The Bureaucrat starts the game knowing how many pairs of Fascists there are.
+The Inspector starts the game knowing that one of three specific players is a particular Agent.
+The Vicar starts the game knowing three players, where exactly one of them is a Fascist.
+The Surveyor, each time a third policy is enacted, publicly chooses two players and learns whether either of them is the Dictator. A Liberal registers as a Dictator to the Surveyor.
+The Nun, each time a policy other than a Liberal policy is enacted, exiles a player and learns how many of their living neighbors are Fascist.
+The Fisherman, once per game, may publicly choose a dead player and learns that player’s role.
+The Organizer, once per game, may publicly choose a player and learns whether that player is an Agent or is learning rumors.
+The Deputy, when exiling a player, publicly chooses three players and learns how many of them are Dissidents.
+The Journalist, when exiling a player, publicly chooses three players and learns how many of them are Liberal.
+The Monk, when exiling a player, publicly chooses two players other than themselves and learns whether those two players share the same alignment.
+The Harrier, upon dying, publicly chooses a player and learns that player’s role.
+The Pacifist, upon dying, remains alive and publicly chooses a player, causing that player to die.
+The Governor causes their team to immediately win if a Chancellor cannot be nominated.
+
+Dissidents
+
+The Usher, each deck, chooses a player other than themselves and must vote Ja if that player is nominated.
+The Rumorist is known to the Dictator and believes they are a Loyalist even though they are not, and instead learns rumors.
+The Conformist is known to the Dictator and may register as a Fascist even while dead, with their loyalty card being Fascist.
+The Klutz, upon dying, causes the Dictator to learn this, and Fascists win if a Fascist is elected Chancellor.
+
+Agents
+
+The Insurrectionary, each deck, chooses a player who then learns rumors until a reshuffle occurs.
+The Noble, each deck, chooses a player who will die if two consecutive elections fail before a reshuffle.
+The Grandma, upon dying, remains alive and publicly chooses a player to die, and may register as any Liberal while their loyalty card remains Liberal.
+The Jester, upon dying, causes the game to end in one minute, after which the player chosen by the most Dissidents dies, and two additional Dissidents are added.
+
+Dictator
+
+Hitler causes their team to immediately win if they are elected Chancellor after three Fascist policies have been enacted.
+
+Rules and Notes
+
+Exile allows any player not currently elected to gain an exile token, which must be discarded after a reshuffle. Exiled players may not run for office.
+Rumors grant no abilities to the player receiving them and may contain arbitrary or false information provided by the Fascists.

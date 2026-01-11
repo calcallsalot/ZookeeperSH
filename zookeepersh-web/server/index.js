@@ -53,7 +53,19 @@ const onlineList = () => Array.from(online.values());
 
 // --- In-memory lobby store (lobbyId -> lobby object) ---
 const lobbies = new Map();
-const lobbyList = () => Array.from(lobbies.values());
+// const lobbyList = () => Array.from(lobbies.values());
+const playerLobby = new Map(); // socket.id -> lobbyId
+
+const publicLobby = (l) => ({
+  id: l.id,
+  name: l.name ?? null,
+  hostName: l.hostName ?? null,
+  players: l.players ?? [],
+  status: l.status ?? "open",
+  createdAt: l.createdAt ?? Date.now(),
+});
+
+const lobbyListPublic = () => Array.from(lobbies.values()).map(publicLobby);
 
 
 
@@ -101,9 +113,11 @@ io.on("connection", (socket) => {
 
   socket.on("init:get", async () => {
     socket.emit("init", {
-      lobbies: lobbyList(),
+      lobbies: lobbyListPublic(),
       onlinePlayers: onlineList(),
     });
+
+    socket.emit("me:lobby", { lobbyId: playerLobby.get(socket.id) ?? null }); // identify playerLobby
 
     try {
       if (!chatCol) {
@@ -178,6 +192,10 @@ io.on("connection", (socket) => {
   });
   // Example createLobby handler (kept)
   socket.on("lobby:create", () => {
+    if (playerLobby.has(socket.id)) {
+      socket.emit("error:lobby", { message: "You’re already in a lobby." });
+      return;
+    } 
     if (!canPlayOrChat(socket)) {
       socket.emit("error:auth", { message: "Sign in required to create or join games." });
       return; // exists lobby:create handler
@@ -200,17 +218,59 @@ io.on("connection", (socket) => {
     };
 
     lobbies.set(lobbyId, lobby);
-    
-    console.log("io] created lobby:", lobby);
 
-  
+    playerLobby.set(socket.id, lobbyId); // obv set lobby for player
+
+    io.emit("lobbies:update", lobbyListPublic()); // dk if this is needed it's public latest list
+
+    console.log("[io] created lobby:", lobby);
+
+    socket.emit("me:lobby", { lobbyId });
     socket.emit("lobby:created", { lobbyId });
 
-    io.emit("lobbies:update", lobbyList()); // dk if this is needed it's public latest list
+    
 
     // (Optional) if later store lobbies, you'd io.emit("lobbies:update", ...)
     // will be needed to add replays like the main site does but for rn who gaf abt replays
   });
+
+
+  // joining lobbies
+  socket.on("lobby:join", ({ lobbyId } = {}) => {
+    if (playerLobby.has(socket.id)) {
+      socket.emit("error:lobby", { message: "You’re already in a lobby." });
+      return;
+    }
+    if (!canPlayOrChat(socket)) {
+      socket.emit("error:auth", { message: "Sign in required to create or join games." });
+      return;
+    }
+
+    const targetLobbyId = typeof lobbyId === "string" ? lobbyId : null;
+    const lobby = targetLobbyId ? lobbies.get(targetLobbyId) : null;
+    if (!lobby) {
+      socket.emit("error:lobby", { message: "Lobby not found." });
+      return;
+    }
+
+    const player = online.get(socket.id);
+    const playerName = player?.name ?? "Guest";
+    const existingPlayers = lobby.players ?? [];
+    const players = existingPlayers.includes(playerName)
+      ? existingPlayers
+      : [...existingPlayers, playerName];
+
+    lobbies.set(targetLobbyId, { ...lobby, players });
+    playerLobby.set(socket.id, targetLobbyId);
+
+    io.emit("lobbies:update", lobbyListPublic());
+    socket.emit("me:lobby", { lobbyId: targetLobbyId });
+  });
+
+
+
+
+
 
   socket.on("disconnect", (reason) => {
     console.log("[io] disconnected:", socket.id, reason);

@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import type { Lobby, OnlinePlayer } from "./types";
 
 
@@ -54,6 +55,11 @@ export type LobbySocketValue = {
   canChat: boolean;
   myName: string;
 
+
+  // lobby shit
+
+  myLobbyId: string | null;
+
   createLobby: () => void;
 
   joinLobby: (lobbyId: string) => void;
@@ -65,14 +71,17 @@ const LobbySocketCtx = createContext<LobbySocketValue | null>(null);
 
 export function LobbySocketProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
+  const router = useRouter();
 
   const socketRef = useRef<Socket | null>(null);
   const [loadingOnlinePlayers, setLoadingOnlinePlayers] = useState(true);
 
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
-
+  // lobby stuff
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
+  const [myLobbyId, setMyLobbyId] = useState<string | null>(null);
+
 
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
 
@@ -80,6 +89,11 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const myName = session?.user?.name ?? session?.user?.email ?? "Guest";
   const canChat = status === "authenticated";
+
+  useEffect(() => {
+    if (!myLobbyId) return;
+    router.push(`/games/table/${myLobbyId}`);
+  }, [myLobbyId, router]);
 
   const sendChat = useCallback((text: string) => {
     const socket = socketRef.current;
@@ -130,6 +144,11 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       setLoadingOnlinePlayers(false);
     });
 
+
+    // more lobby stuff
+    socket.on("me:lobby", ({ lobbyId } = {}) => {
+      setMyLobbyId(lobbyId ?? null);
+    });
 
     socket.on("lobbies:update", (list: Lobby[]) => setLobbies(list));
 
@@ -216,6 +235,10 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       chatMessages,
       canChat,
       myName,
+      
+      // lobby stuff again
+
+      myLobbyId,
 
       sendChat,
       joinLobby,
@@ -230,6 +253,11 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       chatMessages,
       canChat,
       myName,
+
+      // lobby stuff again
+      myLobbyId,
+
+
       sendChat,
       joinLobby,
       createLobby,
