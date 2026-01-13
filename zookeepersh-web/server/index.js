@@ -27,10 +27,13 @@ if (!MONGODB_URI) {
 
 const client = new MongoClient(MONGODB_URI);
 let chatCol;
+let gameChatCol;
+
 
 async function initMongo() {
   await client.connect();
   const db = client.db(); // uses db name from URI; or client.db("zookeeper")
+  gameChatCol = db.collection("game_chat_messages");
   chatCol = db.collection("chat_messages");
 
   const TTL_SECONDS = 60 * 60 * 24; // TTL is 24 hours just do * 7 for 7 days
@@ -42,9 +45,32 @@ async function initMongo() {
   console.log("[mongo] connected and indexes ensured");
 }
 
+
+
+function gameRoom(lobbyId) {
+  return `game:${lobbyId}`; // can't be '' lol it has to be ``
+}
+
+
+
+async function emitGameSystem(lobbyId, text) { // not used by useful for emitting system messages to game chat
+  const msg = {
+    lobbyId,
+    kind: "system",
+    text: String(text),
+    ts: Date.now(),
+    createdAt: new Date(),
+  };
+  const res = await gameChatCol.insertOne(msg);
+  io.to(gameRoom(lobbyId)).emit("game_chat:new", {
+    id: res.insertedId.toString(),
+    ...msg,
+  });
+}
+
 function canPlayOrChat(socket) {
   const p = online.get(socket.id);
-  return !!p && p.authed
+  return !!p && p.authed;
 }
 
 // --- In-memory presence store (socket.id -> player) ---
@@ -94,23 +120,79 @@ io.on("connection", (socket) => {
     online.set(socket.id, {
       ...prev,
       name: name ?? prev.name ?? "Guest",
-      elo: typeof elo === "number" ? elo : (prev.elo ?? 1600),
+      elo: typeof elo === "number" ? elo : (prev.elo ?? null),
       authed: !!authed,
     });
 
     io.emit("onlinePlayers:update", onlineList());
   });
 
-  
-  /*socket.on("init:get", () => {
-    console.log("[io] init:get from", socket.id);
+  // lobby chat by {lobbyId}
+  socket.on("game_chat:join", async ({ lobbyId }) => {
+    if (!lobbyId || typeof lobbyId !== "string") return;
 
-    socket.emit("init", {
-      lobbies: [], 
-      onlinePlayers: onlineList(),
+    socket.join(gameRoom(lobbyId));
+
+    const history = await gameChatCol
+      .find({ lobbyId })
+      .sort({ ts: 1 })
+      .limit(250)
+      .toArray();
+
+    socket.emit("game_chat:history", {
+      lobbyId,
+      messages: history.map((m) => ({
+        id: m._id?.toString?.() ?? undefined,
+        lobbyId: m.lobbyId,
+        kind: m.kind,
+        text: m.text,
+        userName: m.userName ?? null,
+        seat: m.seat ?? null,
+        elo: m.elo ?? null,
+        ts: m.ts,
+      })),
     });
-  });*/
+  });
+  // Send user message
+  socket.on("game_chat:send", async ({ lobbyId, text, seat, elo, userName }) => {
+    if (!lobbyId || typeof lobbyId !== "string") return;
+    if (typeof text !== "string") return;
 
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    // Prefer server-known identity if known, otherwise accept payload (simple for now) need to change later so add to TODO list
+    /*const finalName =
+      socket.data?.userName ||
+      userName ||
+      socket.handshake?.auth?.userName ||
+      "anon";*/
+    const player = online.get(socket.id);
+    const finalName = player?.name ?? "Unkown";
+    const finalElo = player?.elo ?? null; // not really used need to change prob
+
+    const msg = {
+      lobbyId,
+      kind: "user",
+      text: trimmed,
+      userName: finalName,
+      seat: Number.isInteger(seat) ? seat : (socket.data?.seat ?? null),
+      elo: Number.isFinite(elo) ? elo : (socket.data?.elo ?? null),
+      ts: Date.now(),
+      createdAt: new Date(),
+    };
+
+    const res = await gameChatCol.insertOne(msg);
+
+    io.to(gameRoom(lobbyId)).emit("game_chat:new", {
+      id: res.insertedId.toString(),
+      ...msg,
+    });
+  });
+
+
+
+  // lobby chat not game for each lobby chat 
   socket.on("init:get", async () => {
     socket.emit("init", {
       lobbies: lobbyListPublic(),

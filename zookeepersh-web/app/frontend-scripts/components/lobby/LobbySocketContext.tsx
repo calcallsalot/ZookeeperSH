@@ -35,6 +35,18 @@ type InitPayload = {
 };*/ 
 
 // im not sure if I can just use the same chat for the game and the lobby but this is mainly for lobby 
+// well i figured it out you need a different one XD so that's what GameChatMessage is for 
+
+export type GameChatMessage = {
+  id?: string;
+  lobbyId: string;
+  kind: "user" | "system";
+  text: string;
+  userName?: string | null;
+  seat?: number | null;
+  elo?: number | null;
+  ts: number;
+};
 
 export type ChatMessage = {
   id: string;
@@ -54,6 +66,16 @@ export type LobbySocketValue = {
   chatMessages: ChatMessage[];
   canChat: boolean;
   myName: string;
+
+  // game chat
+  gameChatMessages: GameChatMessage[];
+  joinGameChat: (lobbyId: string) => void;
+  sendGameChat: (
+    lobbyId: string,
+    text: string,
+    seat?: number | null,
+    elo?: number | null
+  ) => void;
 
 
   // lobby shit
@@ -89,18 +111,39 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const myName = session?.user?.name ?? session?.user?.email ?? "Guest";
   const canChat = status === "authenticated";
+  // game chat variables
+  const [gameChatMessages, setGameChatMessages] = useState<GameChatMessage[]>([]);
+
 
   useEffect(() => {
     if (!myLobbyId) return;
     router.push(`/games/table/${myLobbyId}`);
   }, [myLobbyId, router]);
 
-  const sendChat = useCallback((text: string) => {
+  const sendChat = useCallback((text: string) => { // for lobby chat
     const socket = socketRef.current;
     if (!socket || !socket.connected) return;
     socket.emit("chat:send", { text });
   }, []);
 
+  const joinGameChat = useCallback((lobbyId: string) => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("game_chat:join", { lobbyId });
+  }, []);
+
+  const sendGameChat = useCallback(
+    (lobbyId: string, text: string, seat?: number | null, elo?: number | null) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("game_chat:send", {
+        lobbyId,
+        text,
+        seat: seat ?? null,
+        elo: elo ?? null,
+        userName: myName ?? null, // reuses same myName i'm pretty sure it's fine
+      });
+    },
+    [myName]
+  );
 
   // 1) Create socket ONCE
   useEffect(() => {
@@ -172,6 +215,18 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     );
 
 
+    // game chat lobby messengers handler
+    socket.on("game_chat:history", ({ lobbyId, messages }: { lobbyId: string; messages: GameChatMessage[] }) => {
+      // per-lobby isolation, stored by lobbyId
+      setGameChatMessages(messages);
+    });
+
+    socket.on("game_chat:new", (msg: GameChatMessage) => {
+      setGameChatMessages((prev) => [...prev, msg]);
+    });
+
+
+
     return () => {
       socket.off();
       socket.disconnect();
@@ -231,10 +286,15 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       lobbies,
       onlinePlayers,
       loadingOnlinePlayers,
-
+      // lobby chat
       chatMessages,
       canChat,
       myName,
+
+      // game chat 
+      gameChatMessages,
+      joinGameChat,
+      sendGameChat,
       
       // lobby stuff again
 
@@ -250,9 +310,16 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       lobbies,
       onlinePlayers,
       loadingOnlinePlayers,
+
+      // lobby chat
       chatMessages,
       canChat,
       myName,
+
+      // game chat 
+      gameChatMessages,
+      joinGameChat,
+      sendGameChat,
 
       // lobby stuff again
       myLobbyId,
