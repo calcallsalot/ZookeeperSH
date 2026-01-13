@@ -28,7 +28,7 @@ export default function GameLobbyHeader({
       }}
     >
       <Link
-        href="/"
+        href="/games"
         style={{
           fontFamily: "var(--font-eskapade-fraktur)",
           fontSize: 28,

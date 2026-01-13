@@ -17,6 +17,7 @@ export default function LobbyCard({ lobby }: { lobby: Lobby }) {
 
   const players = lobby.players ?? [];
   const count = players.length;
+  const statusToShow: "open" | "in_game" | "closed" = count === 7 ? "closed" : (lobby.status ?? "open");
 
   return (
     <div
@@ -57,13 +58,13 @@ export default function LobbyCard({ lobby }: { lobby: Lobby }) {
           >
             <span>Host: {lobby.hostName ?? "—"}</span>
             <span>Players: {count}/{MAX_PLAYERS}</span>
-            <span>Status: {lobby.status ?? "open"}</span>
+            <span>Status: {statusToShow}</span>
           </div>
 
-          {/* ✅ 7 player slots */}
+          {/*  7 player slots */}
           <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {Array.from({ length: MAX_PLAYERS }).map((_, i) => {
-              const name = players[i]; // your Lobby type says players?: string[]
+              const name = players[i]; 
               const filled = Boolean(name);
 
               return (
