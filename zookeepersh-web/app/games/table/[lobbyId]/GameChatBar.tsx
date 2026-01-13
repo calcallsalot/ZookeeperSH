@@ -26,8 +26,9 @@ export default function GameChatBar({
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if(!connected) return;
     joinGameChat?.(lobbyId);
-  }, [joinGameChat, lobbyId]);
+  }, [connected, joinGameChat, lobbyId]);
 
   const sorted = useMemo(() => {
     return [...(gameChatMessages ?? [])]
@@ -58,7 +59,7 @@ export default function GameChatBar({
   return (
     <section
       style={{
-        height: "58%",          // IMPORTANT: fill the right panel area
+        height: "57%",          // IMPORTANT: fill the right panel area
         minHeight: 0,            // IMPORTANT: allow scrolling children
         display: "flex",
         flexDirection: "column",
@@ -103,7 +104,7 @@ export default function GameChatBar({
                 {seatStr}
               </span>
               <span style={{ color: "rgba(255,255,255,0.85)" }}>:</span>
-              <span style={{ color: "white" }}> {`"${m.text}"`}</span>
+              <span style={{ color: "white" }}> {m.text}</span> 
             </div>
           );
         })}
