@@ -7,6 +7,8 @@ import { useLobby } from "../../../frontend-scripts/components/lobby/LobbySocket
 import { useSession } from "next-auth/react";
 import GameLobbyHeader from "../../../frontend-scripts/components/GameLobbyHeader";
 import GameChatBar from "./GameChatBar";
+import { isGameStarted } from "../../../../app/gameLogic/gameState";
+
 
 export default function TableClient({ lobbyId }: { lobbyId: string }) {
   const { data: session, status } = useSession();
@@ -20,12 +22,13 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
   const lobbyPlayerNames = lobby?.players ?? [];
   const playerCount = lobbyPlayerNames.length;
+  const gameStarted = isGameStarted(lobby);
 
   const mySeat = null; // TODO
   const myElo = null;  // TODO
 
   const playersForView = lobbyPlayerNames.map((name) => ({ name }));
-
+  
   return (
     <div
       style={{
@@ -76,7 +79,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
           }}
         >
           <div style={{ flex: 1, minHeight: 0 }}>
-            <GameChatBar lobbyId={lobbyId} mySeat={mySeat} myElo={myElo} />
+            <GameChatBar lobbyId={lobbyId} gameStarted={gameStarted} mySeat={mySeat} myElo={myElo} />
           </div>
         </aside>
       </div>

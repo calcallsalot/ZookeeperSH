@@ -12,10 +12,12 @@ function nameColorFromElo(elo?: number | null) {
 
 export default function GameChatBar({
   lobbyId,
+  gameStarted,
   mySeat,
   myElo,
 }: {
   lobbyId: string;
+  gameStarted: boolean;
   mySeat?: number | null;
   myElo?: number | null;
 }) {
@@ -45,7 +47,7 @@ export default function GameChatBar({
   const onSend = () => {
     const msg = text.trim();
     if (!msg) return;
-    sendGameChat?.(lobbyId, msg, mySeat ?? null, myElo ?? null);
+    sendGameChat?.(lobbyId, msg); // mySeat ?? null, myElo ?? null);
     setText("");
   };
 
@@ -95,7 +97,7 @@ export default function GameChatBar({
             );
           }
 
-          const seatStr = m.seat == null ? "" : ` {${m.seat}}`;
+          const seatStr = gameStarted && m.seat == null ? "" : ` {${m.seat}}`;
 
           return (
             <div key={key} style={{ padding: "2px 0" }}>

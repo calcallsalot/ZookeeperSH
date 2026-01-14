@@ -132,15 +132,15 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const sendGameChat = useCallback(
-    (lobbyId: string, text: string, seat?: number | null, elo?: number | null) => {
+    (lobbyId: string, text: string) => { // seat?: number | null, elo?: number | null
       if (!socketRef.current) return;
       socketRef.current.emit("game_chat:send", {
         lobbyId,
         text,
-        seat: seat ?? null,
-        elo: elo ?? null,
-        userName: myName ?? null, // reuses same myName i'm pretty sure it's fine
       });
+      {/* seat: seat ?? null,
+        elo: elo ?? null,
+        userName: myName ?? null, // reuses same myName i'm pretty sure it's fine*/}
     },
     [myName]
   );

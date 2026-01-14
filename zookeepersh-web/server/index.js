@@ -9,6 +9,7 @@ const httpServer = http.createServer(app);
 
 const { MongoClient, ObjectId } = require("mongodb");
 
+const { startGameIfReady } = require("../app/gameLogic/startGameIfReady");
 
 
 const io = new Server(httpServer, {
@@ -44,6 +45,21 @@ async function initMongo() {
 
   console.log("[mongo] connected and indexes ensured");
 }
+
+
+/*
+function shuffle(arr) { // just a random shuffle of an array
+  array.sort(() => Math.random() -0.5);
+}
+
+// fisher yates method might need who knows 
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}*/
 
 
 
@@ -154,30 +170,28 @@ io.on("connection", (socket) => {
     });
   });
   // Send user message
-  socket.on("game_chat:send", async ({ lobbyId, text, seat, elo, userName }) => {
+  socket.on("game_chat:send", async ({ lobbyId, text }) => {
     if (!lobbyId || typeof lobbyId !== "string") return;
     if (typeof text !== "string") return;
 
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    // Prefer server-known identity if known, otherwise accept payload (simple for now) need to change later so add to TODO list
-    /*const finalName =
-      socket.data?.userName ||
-      userName ||
-      socket.handshake?.auth?.userName ||
-      "anon";*/
     const player = online.get(socket.id);
-    const finalName = player?.name ?? "Unkown";
-    const finalElo = player?.elo ?? null; // not really used need to change prob
+    const finalName = player?.name ?? "Unknown";
+    const finalElo = player?.elo ?? null;
+
+    const lobby = lobbies.get(lobbyId);
+    const started = lobby?.status === "in_game";
+    const seat = started ? (lobby?.seatByName?.[finalName] ?? null) : null;
 
     const msg = {
       lobbyId,
       kind: "user",
       text: trimmed,
       userName: finalName,
-      seat: Number.isInteger(seat) ? seat : (socket.data?.seat ?? null),
-      elo: Number.isFinite(elo) ? elo : (socket.data?.elo ?? null),
+      elo: finalElo,
+      seat, // becomes a number only after startGameIfReady sets seatByName
       ts: Date.now(),
       createdAt: new Date(),
     };
@@ -189,6 +203,7 @@ io.on("connection", (socket) => {
       ...msg,
     });
   });
+
 
 
 
@@ -300,6 +315,14 @@ io.on("connection", (socket) => {
     };
 
     lobbies.set(lobbyId, lobby);
+    startGameIfReady({
+      io,
+      lobbies,
+      lobbyId: lobbyId, // or targetLobbyId
+      gameRoom,
+      lobbyListPublic,
+      emitGameSystem,
+    });
 
     playerLobby.set(socket.id, lobbyId); // obv set lobby for player
 
@@ -343,6 +366,14 @@ io.on("connection", (socket) => {
       : [...existingPlayers, playerName];
 
     lobbies.set(targetLobbyId, { ...lobby, players });
+    startGameIfReady({
+      io,
+      lobbies,
+      lobbyId: targetLobbyId, // or lobbyId
+      gameRoom,
+      lobbyListPublic,
+      emitGameSystem,
+    });
     playerLobby.set(socket.id, targetLobbyId);
 
     io.emit("lobbies:update", lobbyListPublic());
