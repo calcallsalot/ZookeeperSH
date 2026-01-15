@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import clientPromise from "@/lib/mongodb";
+import {ObjectId} from "mongodb";
 
 const handler = NextAuth({
   session: { strategy: "jwt" },
@@ -33,21 +34,26 @@ const handler = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        const userElo = typeof (user as { elo?: number })?.elo === "number"
-          ? (user as { elo?: number }).elo
-          : 1600;
-        (token as { elo?: number }).elo = userElo;
-      }
       return token;
     },
+
     async session({ session, token }) {
-      if (session.user) {
-        const tokenElo = typeof (token as { elo?: number }).elo === "number"
-          ? (token as { elo?: number }).elo
-          : 1600;
-        (session.user as typeof session.user & { elo?: number }).elo = tokenElo;
-      }
+      // token.sub should be the user's id string
+      const userId = token.sub;
+      if (!userId || !session.user) return session;
+      if (!ObjectId.isValid(userId)) return session;
+
+      const client = await clientPromise;
+      const db = client.db();
+
+      const u = await db.collection("users").findOne(
+        { _id: new ObjectId(userId) },
+        { projection: { elo: 1 } }
+      );
+
+      (session.user as typeof session.user & { elo?: number }).elo =
+        typeof u?.elo === "number" ? u.elo : 1600;
+
       return session;
     },
   },
