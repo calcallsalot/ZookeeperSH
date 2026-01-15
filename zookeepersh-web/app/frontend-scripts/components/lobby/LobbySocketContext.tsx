@@ -45,6 +45,7 @@ export type GameChatMessage = {
   userName?: string | null;
   seat?: number | null;
   elo?: number | null;
+  observer?: | boolean;
   ts: number;
 };
 
@@ -113,6 +114,19 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   const canChat = status === "authenticated";
   // game chat variables
   const [gameChatMessages, setGameChatMessages] = useState<GameChatMessage[]>([]);
+
+  const guestId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const storageKey = "zk_guest_id";
+    const existing = window.localStorage.getItem(storageKey);
+    if (existing) return existing;
+    const generated =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    window.localStorage.setItem(storageKey, generated);
+    return generated;
+  }, []);
 
 
   useEffect(() => {
@@ -241,10 +255,21 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
     const name = session?.user?.name ?? session?.user?.email ?? "Guest";
     const authed = status === "authenticated";
+    const sessionUser = session?.user as { elo?: number } | undefined;
+    const elo = authed // very confusing you're gonna have to edit this later
+      ? typeof sessionUser?.elo === "number"
+        ? sessionUser.elo
+        : 1600
+      : null;
 
-    socket.emit("presence:set", { name, authed});
-    console.log("[presence:set] sent", { name, authed });
-  }, [connected, session, status]);
+    socket.emit("presence:set", {
+       name, 
+       authed,
+       elo,
+       guestId: authed ? undefined : guestId ?? undefined,
+    });
+    console.log("[presence:set] sent", { name, authed, elo });
+  }, [connected, session, status, guestId]);
 
   // 3) createLobby action exposed to components
   const createLobby = useCallback(() => {

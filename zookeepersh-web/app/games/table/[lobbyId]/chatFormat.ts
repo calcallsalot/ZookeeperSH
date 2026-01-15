@@ -9,5 +9,6 @@ export function formatSeat(seat?: number | null, showSeat?: boolean) {
 export function formatLine(m: GameChatMessage, showSeat: boolean) {
   if (m.kind === "system") return m.text;
   const seatStr = formatSeat(m.seat, showSeat);
-  return `${m.userName ?? "anon"}${seatStr}: ${m.text}`;
+  const observerLabel = m.observer ? " :  (observer)" : "";
+  return `${m.userName ?? "anon"}${observerLabel}${seatStr}: ${m.text}`;
 }
