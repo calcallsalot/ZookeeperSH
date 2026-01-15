@@ -17,7 +17,10 @@ export default function LobbyCard({ lobby }: { lobby: Lobby }) {
 
   const players = lobby.players ?? [];
   const count = players.length;
-  const statusToShow: "open" | "in_game" | "closed" = count === 7 ? "closed" : (lobby.status ?? "open");
+  const statusToShow: "open" | "in_game" | "closed" =
+    lobby.status === "in_game" || count === 7 ? "in_game" : (lobby.status ?? "open");
+  
+
 
   return (
     <div
