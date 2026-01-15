@@ -13,7 +13,7 @@ import { io, type Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { Lobby, OnlinePlayer } from "./types";
-
+import { usePathname } from "next/navigation";
 
 // not technically needed but here
 // export type Lobby = { id: string; code: string }; 
@@ -104,6 +104,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   // lobby stuff
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [myLobbyId, setMyLobbyId] = useState<string | null>(null);
+  const pathName = usePathname();
 
 
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
@@ -131,8 +132,9 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!myLobbyId) return;
+    if (pathName.startsWith("/games/table/")) return;
     router.push(`/games/table/${myLobbyId}`);
-  }, [myLobbyId, router]);
+  }, [myLobbyId, pathName, router]);
 
   const sendChat = useCallback((text: string) => { // for lobby chat
     const socket = socketRef.current;

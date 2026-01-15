@@ -8,9 +8,5 @@ export default async function Page({
 }) {
   const { lobbyId } = await params;
 
-  return (
-    <LobbySocketProvider>
-      <TableClient lobbyId={lobbyId} />
-    </LobbySocketProvider>
-  );
+  return <TableClient lobbyId={lobbyId} />; 
 }

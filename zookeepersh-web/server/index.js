@@ -171,7 +171,7 @@ io.on("connection", (socket) => {
   // default presence
   // default presence
   const defaultPresenceKey = `guest:${socket.id}`;
-  online.set(socket.id, { id: socket.id, name: "Guest", elo: null, authed: false });
+  //online.set(socket.id, { id: socket.id, name: "Guest", elo: null, authed: false });
   online.set(socket.id, {
     id: socket.id,
     name: "Guest",
@@ -216,7 +216,7 @@ io.on("connection", (socket) => {
       id: socket.id,
       name: displayName,
       elo: typeof nextElo === "number" ? nextElo : null,
-      authed: false,
+      authed: isAuthed,
       presenceKey,
       updatedAt: Date.now(),
     });
