@@ -96,13 +96,15 @@ export default function GameChatBar({
               </div>
             );
           }
-
-          const seatStr = gameStarted && m.seat == null ? "" : ` {${m.seat}}`;
+          const isObserver = Boolean(m.observer);
+          const observerLabel = isObserver ? " (observer)" : "";
+          const seatStr = !isObserver && gameStarted && m.seat != null ? ` {${m.seat}}` : "";
 
           return (
             <div key={key} style={{ padding: "2px 0" }}>
               <span style={{ color: nameColorFromElo(m.elo), fontWeight: 800 }}>
                 {m.userName ?? "anon"}
+                {observerLabel}
                 {seatStr}
               </span>
               <span style={{ color: "rgba(255,255,255,0.85)" }}>:</span>
