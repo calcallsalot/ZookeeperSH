@@ -90,13 +90,62 @@ function canPlayOrChat(socket) {
 }
 
 // --- In-memory presence store (socket.id -> player) ---
-const online = new Map(); // { id, name, elo }
-const onlineList = () => Array.from(online.values());
+const online = new Map(); // { id, name, elo, authed, presenceKey, updatedAt}
+// const onlineList = () => Array.from(online.values());
+// changed from this to presence because of observers
+const presenceSockets = new Map(); // presenceKey -> Set<socket.id> 
 
 // --- In-memory lobby store (lobbyId -> lobby object) ---
 const lobbies = new Map();
 // const lobbyList = () => Array.from(lobbies.values());
 const playerLobby = new Map(); // socket.id -> lobbyId
+
+
+function addPresenceSocket(presenceKey, socketId) {
+  if (!presenceKey) return;
+  const existing = presenceSockets.get(presenceKey);
+  if (existing) {
+    existing.add(socketId);
+    return;
+  }
+  presenceSockets.set(presenceKey, new Set([socketId]));
+}
+function removePresenceSocket(presenceKey, socketId) {
+  const existing = presenceSockets.get(presenceKey);
+  if (!existing) return 0;
+  existing.delete(socketId);
+  if (existing.size === 0) {
+    presenceSockets.delete(presenceKey);
+    return 0;
+  }
+  return existing.size;
+}
+function hasPresenceInLobby(presenceKey, lobbyId, role) {
+  if (!presenceKey || !lobbyId) return false;
+  for (const [socketId, info] of playerLobby.entries()) {
+    if (!info || info.lobbyId !== lobbyId) continue;
+    if (role && info.role !== role) continue;
+    const player = online.get(socketId);
+    if (player?.presenceKey === presenceKey) return true;
+  }
+  return false;
+}
+const onlineList = () => {
+  const unique = new Map();
+  for (const player of online.values()) {
+    const key = player?.presenceKey ?? player?.id ?? player?.name;
+    if (!key) continue;
+    const existing = unique.get(key);
+    if (!existing || (player.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
+      unique.set(key, player);
+    }
+  }
+  return Array.from(unique.entries()).map(([key, player]) => ({
+    id: key,
+    name: player?.name ?? "Guest",
+    elo: player?.elo ?? null,
+  }));
+};
 
 const publicLobby = (l) => ({
   id: l.id,
@@ -120,24 +169,56 @@ io.on("connection", (socket) => {
   });
 
   // default presence
+  // default presence
+  const defaultPresenceKey = `guest:${socket.id}`;
   online.set(socket.id, { id: socket.id, name: "Guest", elo: null, authed: false });
+  online.set(socket.id, {
+    id: socket.id,
+    name: "Guest",
+    elo: null,
+    authed: false,
+    presenceKey: defaultPresenceKey,
+    updatedAt: Date.now(),
+  });
+  addPresenceSocket(defaultPresenceKey, socket.id);
 
   // Broadcast current online list to everyone 
   io.emit("onlinePlayers:update", onlineList());
 
-  // Client tells server who they are
-  socket.on("presence:set", ({ name, elo, authed } = {}) => {
+  // Client tells servger who they are
+  socket.on("presence:set", ({ name, elo, authed, guestId } = {}) => {
 
     const prev = online.get(socket.id) || { id: socket.id };
     //const isGuest = name === "Guest";
     // not needed and before with !null || it was always true
+    const displayName =
+      typeof name === "string" && name.trim().length > 0
+        ? name.trim()
+        : prev.name ?? "Guest";
+    const isAuthed = !!authed;
+    let nextElo = typeof elo === "number" ? elo : prev.elo;
 
+    if (isAuthed && typeof nextElo !== "number") {
+      nextElo = 1600;
+    }
+    const guestKey =
+      typeof guestId === "string" && guestId.trim().length > 0
+        ? guestId.trim()
+        : socket.id;
+    const presenceKey = (isAuthed ? `user:${displayName}` : `guest:${guestKey}`).toLowerCase();
+    if (prev.presenceKey && prev.presenceKey !== presenceKey) {
+      removePresenceSocket(prev.presenceKey, socket.id);
+    }
+    addPresenceSocket(presenceKey, socket.id);
 
     online.set(socket.id, {
       ...prev,
-      name: name ?? prev.name ?? "Guest",
-      elo: typeof elo === "number" ? elo : (prev.elo ?? null),
-      authed: !!authed,
+      id: socket.id,
+      name: displayName,
+      elo: typeof nextElo === "number" ? nextElo : null,
+      authed: false,
+      presenceKey,
+      updatedAt: Date.now(),
     });
 
     io.emit("onlinePlayers:update", onlineList());
@@ -183,7 +264,9 @@ io.on("connection", (socket) => {
 
     const lobby = lobbies.get(lobbyId);
     const started = lobby?.status === "in_game";
-    const seat = started ? (lobby?.seatByName?.[finalName] ?? null) : null;
+    const lobbyInfo = playerLobby.get(socket.id);
+    const observer = lobbyInfo?.lobbyId === lobbyId && lobbyInfo.role === "observer";
+    const seat = started && !observer ? (lobby?.seatByName?.[finalName] ?? null) : null;
 
     const msg = {
       lobbyId,
@@ -191,7 +274,8 @@ io.on("connection", (socket) => {
       text: trimmed,
       userName: finalName,
       elo: finalElo,
-      seat, // becomes a number only after startGameIfReady sets seatByName
+      seat, // becomes a number only after startGameIfReady sets seatByName and also !observer
+      observer,
       ts: Date.now(),
       createdAt: new Date(),
     };
@@ -214,7 +298,7 @@ io.on("connection", (socket) => {
       onlinePlayers: onlineList(),
     });
 
-    socket.emit("me:lobby", { lobbyId: playerLobby.get(socket.id) ?? null }); // identify playerLobby
+    socket.emit("me:lobby", { lobbyId: playerLobby.get(socket.id)?.lobbyId ?? null }); // identify playerLobby
 
     try {
       if (!chatCol) {
@@ -324,7 +408,7 @@ io.on("connection", (socket) => {
       emitGameSystem,
     });
 
-    playerLobby.set(socket.id, lobbyId); // obv set lobby for player
+    playerLobby.set(socket.id, {lobbyId, role: "player"}); // obv set lobby for player
 
     io.emit("lobbies:update", lobbyListPublic()); // dk if this is needed it's public latest list
 
@@ -361,23 +445,39 @@ io.on("connection", (socket) => {
     const player = online.get(socket.id);
     const playerName = player?.name ?? "Guest";
     const existingPlayers = lobby.players ?? [];
-    const players = existingPlayers.includes(playerName)
-      ? existingPlayers
-      : [...existingPlayers, playerName];
+    const isAlreadyPlayer = existingPlayers.includes(playerName);
+    const isInGame = lobby.status === "in_game";
+    const isFull = existingPlayers.length >= 7;
 
-    lobbies.set(targetLobbyId, { ...lobby, players });
-    startGameIfReady({
-      io,
-      lobbies,
-      lobbyId: targetLobbyId, // or lobbyId
-      gameRoom,
-      lobbyListPublic,
-      emitGameSystem,
-    });
-    playerLobby.set(socket.id, targetLobbyId);
+    if (isAlreadyPlayer || (!isInGame && !isFull)) {
+      const players = isAlreadyPlayer ? existingPlayers : [...existingPlayers, playerName];
+      lobbies.set(targetLobbyId, { ...lobby, players });
+      startGameIfReady({
+        io,
+        lobbies,
+        lobbyId: targetLobbyId, // or lobbyId
+        gameRoom,
+        lobbyListPublic,
+        emitGameSystem,
+      });
+      playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: "player" });
+    } else {
+      if (!isInGame && existingPlayers.length === 7) {
+        startGameIfReady({
+          io,
+          lobbies,
+          lobbyId: targetLobbyId,
+          gameRoom,
+          lobbyListPublic,
+          emitGameSystem,
+        });
+      }
+      playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: "observer" });
+    }
 
     io.emit("lobbies:update", lobbyListPublic());
     socket.emit("me:lobby", { lobbyId: targetLobbyId });
+
   });
 
 
@@ -388,9 +488,35 @@ io.on("connection", (socket) => {
   socket.on("disconnect", (reason) => {
     console.log("[io] disconnected:", socket.id, reason);
 
+    const player = online.get(socket.id);
+    const presenceKey = player?.presenceKey;
+    const playerName = player?.name;
+    const lobbyInfo = playerLobby.get(socket.id);
+    playerLobby.delete(socket.id);
+    if (presenceKey) {
+      removePresenceSocket(presenceKey, socket.id);
+    }
+
     // Remove from presence and broadcast update
     online.delete(socket.id);
     io.emit("onlinePlayers:update", onlineList());
+    // sloppiest fucking code ever we're gonna have to fix this
+    if (lobbyInfo?.lobbyId && lobbyInfo.role === "player" && presenceKey) {
+      const stillInLobby = hasPresenceInLobby(presenceKey, lobbyInfo.lobbyId, "player");
+      if (!stillInLobby) {
+        const lobby = lobbies.get(lobbyInfo.lobbyId);
+        if (lobby) {
+          const currentPlayers = lobby.players ?? [];
+          const nextPlayers = playerName
+            ? currentPlayers.filter((name) => name !== playerName)
+            : currentPlayers;
+          if (nextPlayers.length !== currentPlayers.length) {
+            lobbies.set(lobbyInfo.lobbyId, { ...lobby, players: nextPlayers });
+            io.emit("lobbies:update", lobbyListPublic());
+          }
+        }
+      }
+    }
   });
 });
 
