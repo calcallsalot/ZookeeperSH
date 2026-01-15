@@ -28,6 +28,7 @@ export async function POST(req: Request) {
       email: email.toLowerCase(),
       name: name ?? null,
       passwordHash,
+      elo: 1600,
       createdAt: new Date(),
     });
 

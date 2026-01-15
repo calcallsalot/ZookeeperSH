@@ -26,11 +26,32 @@ const handler = NextAuth({
 
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
-
-        return { id: user._id.toString(), email: user.email, name: user.name ?? undefined };
+        const elo = typeof user.elo === "number" ? user.elo : 1600;
+        return { id: user._id.toString(), email: user.email, name: user.name ?? undefined, elo};
       },
     }),
   ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        const userElo = typeof (user as { elo?: number })?.elo === "number"
+          ? (user as { elo?: number }).elo
+          : 1600;
+        (token as { elo?: number }).elo = userElo;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        const tokenElo = typeof (token as { elo?: number }).elo === "number"
+          ? (token as { elo?: number }).elo
+          : 1600;
+        (session.user as typeof session.user & { elo?: number }).elo = tokenElo;
+      }
+      return session;
+    },
+  },
+
 });
 
 export { handler as GET, handler as POST };
