@@ -98,7 +98,8 @@ const presenceSockets = new Map(); // presenceKey -> Set<socket.id>
 // --- In-memory lobby store (lobbyId -> lobby object) ---
 const lobbies = new Map();
 // const lobbyList = () => Array.from(lobbies.values());
-const playerLobby = new Map(); // socket.id -> lobbyId
+const playerLobby = new Map(); // socket.id -> { lobbyId, role }
+
 
 
 function addPresenceSocket(presenceKey, socketId) {
@@ -130,7 +131,42 @@ function hasPresenceInLobby(presenceKey, lobbyId, role) {
   }
   return false;
 }
+
+function getPresenceLobbyInfo(presenceKey) {
+  if (!presenceKey) return null;
+  let lobbyId = null;
+  let role = null;
+  for (const [socketId, info] of playerLobby.entries()) {
+    if (!info?.lobbyId) continue;
+    const player = online.get(socketId);
+    if (player?.presenceKey !== presenceKey) continue;
+    if (!lobbyId) {
+      lobbyId = info.lobbyId;
+      role = info.role ?? "observer";
+      continue;
+    }
+    if (info.lobbyId !== lobbyId) {
+      return { lobbyId, role: role ?? "observer", conflict: true };
+    }
+    if (info.role === "player") {
+      role = "player";
+    }
+  }
+  return lobbyId ? { lobbyId, role: role ?? "observer" } : null;
+}
+
+function setPresenceRoleInLobby(presenceKey, lobbyId, role) {
+  if (!presenceKey || !lobbyId) return;
+  for (const [socketId, info] of playerLobby.entries()) {
+    if (!info?.lobbyId || info.lobbyId !== lobbyId) continue;
+    const player = online.get(socketId);
+    if (player?.presenceKey !== presenceKey) continue;
+    playerLobby.set(socketId, { ...info, lobbyId, role });
+  }
+}
+
 const onlineList = () => {
+
   const unique = new Map();
   for (const player of online.values()) {
     const key = player?.presenceKey ?? player?.id ?? player?.name;
@@ -158,9 +194,32 @@ const publicLobby = (l) => ({
 
 const lobbyListPublic = () => Array.from(lobbies.values()).map(publicLobby);
 
+function getLobbySocketIds(lobbyId) {
+  const socketIds = [];
+  for (const [socketId, info] of playerLobby.entries()) {
+    if (info?.lobbyId === lobbyId) {
+      socketIds.push(socketId);
+    }
+  }
+  return socketIds;
+}
 
+function closeLobby(lobbyId, reason) {
+  const lobby = lobbies.get(lobbyId);
+  if (!lobby) return;
+  lobbies.delete(lobbyId);
+  const lobbySocketIds = getLobbySocketIds(lobbyId);
+  lobbySocketIds.forEach((socketId) => {
+    playerLobby.delete(socketId);
+    io.to(socketId).emit("me:lobby", { lobbyId: null });
+    io.to(socketId).emit("lobby:closed", { lobbyId });
+  });
+  console.log("[io] lobby:closed", { lobbyId, reason });
+  io.emit("lobbies:update", lobbyListPublic());
+}
 
 io.on("connection", (socket) => {
+
   console.log("[io] connected:", socket.id);
 
   // Log every event received (helps debug)
@@ -373,27 +432,27 @@ io.on("connection", (socket) => {
   });
   // Example createLobby handler (kept)
   socket.on("lobby:create", () => {
-    if (playerLobby.has(socket.id)) {
-      socket.emit("error:lobby", { message: "You’re already in a lobby." });
-      return;
-    } 
     if (!canPlayOrChat(socket)) {
       socket.emit("error:auth", { message: "Sign in required to create or join games." });
-      return; // exists lobby:create handler
+      return;
+    }
+    const host = online.get(socket.id);
+    const presenceKey = host?.presenceKey ?? null;
+    const existingPresence = getPresenceLobbyInfo(presenceKey);
+    if (existingPresence) {
+      socket.emit("error:lobby", { message: "You’re already in a lobby." });
+      return;
     }
     const lobbyId = Math.random().toString(36).slice(2, 8).toUpperCase();
     console.log("[io] lobby:create =>", lobbyId);
 
-    // host name
-
-    const host = online.get(socket.id);
     const hostName = host?.name ?? "Guest";
 
     const lobby = {
       id: lobbyId,
       name: null,
       hostName,
-      players: [hostName],   // client treats this as string[]
+      players: [hostName],
       status: "open",
       createdAt: Date.now(),
     };
@@ -402,34 +461,26 @@ io.on("connection", (socket) => {
     startGameIfReady({
       io,
       lobbies,
-      lobbyId: lobbyId, // or targetLobbyId
+      lobbyId: lobbyId,
       gameRoom,
       lobbyListPublic,
       emitGameSystem,
     });
 
-    playerLobby.set(socket.id, {lobbyId, role: "player"}); // obv set lobby for player
+    playerLobby.set(socket.id, { lobbyId, role: "player" });
 
-    io.emit("lobbies:update", lobbyListPublic()); // dk if this is needed it's public latest list
+    io.emit("lobbies:update", lobbyListPublic());
 
     console.log("[io] created lobby:", lobby);
 
     socket.emit("me:lobby", { lobbyId });
     socket.emit("lobby:created", { lobbyId });
-
-    
-
-    // (Optional) if later store lobbies, you'd io.emit("lobbies:update", ...)
-    // will be needed to add replays like the main site does but for rn who gaf abt replays
   });
+
 
 
   // joining lobbies
   socket.on("lobby:join", ({ lobbyId } = {}) => {
-    if (playerLobby.has(socket.id)) {
-      socket.emit("error:lobby", { message: "You’re already in a lobby." });
-      return;
-    }
     if (!canPlayOrChat(socket)) {
       socket.emit("error:auth", { message: "Sign in required to create or join games." });
       return;
@@ -444,41 +495,83 @@ io.on("connection", (socket) => {
 
     const player = online.get(socket.id);
     const playerName = player?.name ?? "Guest";
+    const presenceKey = player?.presenceKey ?? null;
+    const existingPresence = getPresenceLobbyInfo(presenceKey);
+    if (existingPresence && existingPresence.lobbyId !== targetLobbyId) {
+      socket.emit("error:lobby", { message: "You’re already in a lobby." });
+      return;
+    }
+
     const existingPlayers = lobby.players ?? [];
     const isAlreadyPlayer = existingPlayers.includes(playerName);
-    const isInGame = lobby.status === "in_game";
-    const isFull = existingPlayers.length >= 7;
+    const nextRole = isAlreadyPlayer ? "player" : existingPresence?.role ?? "observer";
+    playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: nextRole });
 
-    if (isAlreadyPlayer || (!isInGame && !isFull)) {
-      const players = isAlreadyPlayer ? existingPlayers : [...existingPlayers, playerName];
-      lobbies.set(targetLobbyId, { ...lobby, players });
-      startGameIfReady({
-        io,
-        lobbies,
-        lobbyId: targetLobbyId, // or lobbyId
-        gameRoom,
-        lobbyListPublic,
-        emitGameSystem,
-      });
-      playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: "player" });
-    } else {
-      if (!isInGame && existingPlayers.length === 7) {
-        startGameIfReady({
-          io,
-          lobbies,
-          lobbyId: targetLobbyId,
-          gameRoom,
-          lobbyListPublic,
-          emitGameSystem,
-        });
-      }
-      playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: "observer" });
+    if (isAlreadyPlayer && presenceKey) {
+      setPresenceRoleInLobby(presenceKey, targetLobbyId, "player");
     }
+
+    socket.emit("me:lobby", { lobbyId: targetLobbyId });
+  });
+
+  socket.on("lobby:sit", ({ lobbyId } = {}) => {
+    if (!canPlayOrChat(socket)) {
+      socket.emit("error:auth", { message: "Sign in required to create or join games." });
+      return;
+    }
+
+    const targetLobbyId = typeof lobbyId === "string" ? lobbyId : null;
+    const lobby = targetLobbyId ? lobbies.get(targetLobbyId) : null;
+    if (!lobby) {
+      socket.emit("error:lobby", { message: "Lobby not found." });
+      return;
+    }
+
+    const player = online.get(socket.id);
+    const playerName = player?.name ?? "Guest";
+    const presenceKey = player?.presenceKey ?? null;
+    const existingPresence = getPresenceLobbyInfo(presenceKey);
+    if (existingPresence && existingPresence.lobbyId !== targetLobbyId) {
+      socket.emit("error:lobby", { message: "You’re already in a lobby." });
+      return;
+    }
+
+    const existingPlayers = lobby.players ?? [];
+    if (existingPlayers.includes(playerName)) {
+      playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: "player" });
+      if (presenceKey) {
+        setPresenceRoleInLobby(presenceKey, targetLobbyId, "player");
+      }
+      socket.emit("me:lobby", { lobbyId: targetLobbyId });
+      return;
+    }
+
+    if (lobby.status === "in_game" || existingPlayers.length >= 7) {
+      socket.emit("error:lobby", { message: "Lobby is full." });
+      return;
+    }
+
+    const nextPlayers = [...existingPlayers, playerName];
+    lobbies.set(targetLobbyId, { ...lobby, players: nextPlayers });
+
+    playerLobby.set(socket.id, { lobbyId: targetLobbyId, role: "player" });
+    if (presenceKey) {
+      setPresenceRoleInLobby(presenceKey, targetLobbyId, "player");
+    }
+
+    startGameIfReady({
+      io,
+      lobbies,
+      lobbyId: targetLobbyId,
+      gameRoom,
+      lobbyListPublic,
+      emitGameSystem,
+    });
 
     io.emit("lobbies:update", lobbyListPublic());
     socket.emit("me:lobby", { lobbyId: targetLobbyId });
-
   });
+
 
 
 
@@ -511,9 +604,14 @@ io.on("connection", (socket) => {
             ? currentPlayers.filter((name) => name !== playerName)
             : currentPlayers;
           if (nextPlayers.length !== currentPlayers.length) {
-            lobbies.set(lobbyInfo.lobbyId, { ...lobby, players: nextPlayers });
-            io.emit("lobbies:update", lobbyListPublic());
+            if (nextPlayers.length === 0) {
+              closeLobby(lobbyInfo.lobbyId, "no-seated-players");
+            } else {
+              lobbies.set(lobbyInfo.lobbyId, { ...lobby, players: nextPlayers });
+              io.emit("lobbies:update", lobbyListPublic());
+            }
           }
+
         }
       }
     }

@@ -86,8 +86,10 @@ export type LobbySocketValue = {
   createLobby: () => void;
 
   joinLobby: (lobbyId: string) => void;
+  sitInLobby: (lobbyId: string) => void;
 
   sendChat: (text: string) => void;
+
 };
 
 const LobbySocketCtx = createContext<LobbySocketValue | null>(null);
@@ -104,7 +106,9 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   // lobby stuff
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [myLobbyId, setMyLobbyId] = useState<string | null>(null);
+  const lastLobbyIdRef = useRef<string | null>(null);
   const pathName = usePathname();
+
 
 
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
@@ -131,10 +135,17 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
 
   useEffect(() => {
-    if (!myLobbyId) return;
-    if (pathName.startsWith("/games/table/")) return;
-    router.push(`/games/table/${myLobbyId}`);
+    const previousLobbyId = lastLobbyIdRef.current;
+    if (myLobbyId) {
+      if (!pathName.startsWith("/games/table/")) {
+        router.push(`/games/table/${myLobbyId}`);
+      }
+    } else if (previousLobbyId && pathName.startsWith("/games/table/")) {
+      router.push("/games");
+    }
+    lastLobbyIdRef.current = myLobbyId;
   }, [myLobbyId, pathName, router]);
+
 
   const sendChat = useCallback((text: string) => { // for lobby chat
     const socket = socketRef.current;
@@ -214,11 +225,17 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     socket.on("lobby:created", (payload: { lobbyId: string }) => {
       console.log("[socket] lobby:created received:", payload);
 
-      // Re-fetch latest lobby list from server
       socket.emit("init:get");
     });
 
+    socket.on("lobby:closed", ({ lobbyId } = {}) => {
+      if (typeof lobbyId !== "string") return;
+      console.log("[socket] lobby:closed received:", lobbyId);
+      setMyLobbyId(null);
+    });
+
     socket.on("onlinePlayers:update", (list: OnlinePlayer[]) => {
+
       console.log("[socket] onlinePlayers:update received:", list);
       setOnlinePlayers(list);
       setLoadingOnlinePlayers(false);
@@ -293,8 +310,17 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     socket.emit("lobby:join", { lobbyId });
   }, []);
 
+  const sitInLobby = useCallback((lobbyId: string) => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      console.warn("[sitInLobby] socket not connected");
+      return;
+    }
+    socket.emit("lobby:sit", { lobbyId });
+  }, []);
 
   /*const value = useMemo<LobbySocketValue>(
+
     () => ({
       connected,
       loading,
@@ -329,8 +355,10 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
       sendChat,
       joinLobby,
+      sitInLobby,
       createLobby,
     }),
+
     [
       connected,
       loading,
@@ -354,8 +382,10 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
       sendChat,
       joinLobby,
+      sitInLobby,
       createLobby,
     ]
+
   );
 
   return (

@@ -13,7 +13,8 @@ import { isGameStarted } from "../../../../app/gameLogic/gameState";
 export default function TableClient({ lobbyId }: { lobbyId: string }) {
   const { data: session, status } = useSession();
   const userName = session?.user?.name ?? null;
-  const { lobbies, myLobbyId } = useLobby();
+  const { lobbies, myLobbyId, sitInLobby, myName, canChat, connected } = useLobby();
+
 
   const lobby = useMemo(
     () => lobbies.find((l) => l.id === lobbyId),
@@ -23,6 +24,11 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
   const lobbyPlayerNames = lobby?.players ?? [];
   const playerCount = lobbyPlayerNames.length;
   const gameStarted = isGameStarted(lobby);
+  const isInLobby = myLobbyId === lobbyId;
+  const isSeated = lobbyPlayerNames.includes(myName);
+  const showSitButton = Boolean(lobby && isInLobby && !isSeated && playerCount < 7);
+  const sitDisabled = !canChat || !connected;
+
 
   const mySeat = null; // TODO
   const myElo = null;  // TODO
@@ -57,7 +63,14 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
             <BoardView playerCount={playerCount} />
 
             <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-              <PlayerListView playerCount={playerCount} players={playersForView} />
+              <PlayerListView
+                playerCount={playerCount}
+                players={playersForView}
+                showSitButton={showSitButton}
+                sitDisabled={sitDisabled}
+                onSit={showSitButton ? () => sitInLobby(lobbyId) : undefined}
+              />
+
             </div>
 
             {/* (optional debug)

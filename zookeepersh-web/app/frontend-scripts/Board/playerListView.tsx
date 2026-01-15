@@ -60,8 +60,56 @@ function AvatarTile({ name }: { name: string }) {
   );
 }
 
+function SitDownTile({
+  onSit,
+  disabled,
+}: {
+  onSit?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div style={{ width: 86 }}>
+      <div
+        style={{
+          textAlign: "center",
+          fontSize: 14,
+          color: "rgba(255,255,255,0.85)",
+          marginBottom: 6,
+          textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+        title="Sit down"
+      >
+        Sit down
+      </div>
+      <button
+        type="button"
+        onClick={onSit}
+        disabled={disabled}
+        style={{
+          width: "100%",
+          height: 112,
+          borderRadius: 10,
+          border: "1px solid rgba(255,255,255,0.25)",
+          background: disabled ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.22)",
+          color: "rgba(0,0,0,0.8)",
+          fontSize: 13,
+          fontWeight: 900,
+          letterSpacing: 0.4,
+          fontFamily: "var(--font-comfortaa)",
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        Sit
+      </button>
+    </div>
+  );
+}
 
 function CardTile({
+
   seat,
   name,
   isChancellor,
@@ -146,16 +194,25 @@ export default function PlayerListView({
   players,
   chancellorSeat, // 1..7
   presidentSeat,  // 1..7 (optional)
+  showSitButton,
+  onSit,
+  sitDisabled,
 }: {
   playerCount: number;
   players?: PlayerSlot[];
   chancellorSeat?: number;
   presidentSeat?: number;
+  showSitButton?: boolean;
+  onSit?: () => void;
+  sitDisabled?: boolean;
 }) {
   const clamped = Math.max(0, Math.min(7, playerCount));
 
-  const fallbackName = (i: number) => `Player${i + 1}`;
-  const getName = (i: number) => players?.[i]?.name ?? fallbackName(i);
+  const fallbackName = (index: number) => `Player${index + 1}`;
+  const getName = (index: number) => players?.[index]?.name ?? fallbackName(index);
+  const showSeatButton = Boolean(showSitButton && clamped < 7);
+  const sitButtonDisabled = Boolean(sitDisabled || !onSit);
+
 
   const containerStyle: CSSProperties = {
     display: "flex",
@@ -169,18 +226,19 @@ export default function PlayerListView({
   if (clamped === 7) {
     return (
       <div style={containerStyle}>
-        {Array.from({ length: 7 }).map((_, i) => {
-          const seat = i + 1;
+        {Array.from({ length: 7 }).map((_, index) => {
+          const seat = index + 1;
           return (
             <CardTile
               key={seat}
               seat={seat}
-              name={getName(i)}
+              name={getName(index)}
               isChancellor={chancellorSeat === seat}
               isPresident={presidentSeat === seat}
             />
           );
         })}
+
       </div>
     );
   }
@@ -188,9 +246,13 @@ export default function PlayerListView({
   // NOT FULL -> avatar view
   return (
     <div style={containerStyle}>
-      {Array.from({ length: clamped }).map((_, i) => (
-        <AvatarTile key={i} name={getName(i)} />
+      {Array.from({ length: clamped }).map((_, index) => (
+        <AvatarTile key={index} name={getName(index)} />
       ))}
+      {showSeatButton ? (
+        <SitDownTile onSit={onSit} disabled={sitButtonDisabled} />
+      ) : null}
     </div>
   );
 }
+
