@@ -26,7 +26,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
   const gameStarted = isGameStarted(lobby);
   const isInLobby = myLobbyId === lobbyId;
   const isSeated = lobbyPlayerNames.includes(myName);
-  const showSitButton = Boolean(lobby && isInLobby && !isSeated && playerCount < 7);
+  const showSitButton = Boolean(lobby && isInLobby && !isSeated && !gameStarted && playerCount < 7);
   const sitDisabled = !canChat || !connected;
 
 

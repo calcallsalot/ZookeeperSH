@@ -136,7 +136,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const previousLobbyId = lastLobbyIdRef.current;
-    if (myLobbyId) {
+    if (myLobbyId && myLobbyId !== previousLobbyId) {
       if (!pathName.startsWith("/games/table/")) {
         router.push(`/games/table/${myLobbyId}`);
       }

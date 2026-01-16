@@ -599,6 +599,9 @@ io.on("connection", (socket) => {
       if (!stillInLobby) {
         const lobby = lobbies.get(lobbyInfo.lobbyId);
         if (lobby) {
+          const isGameStarted = (lobby.status ?? "open") === "in_game";
+          if (isGameStarted) return;
+
           const currentPlayers = lobby.players ?? [];
           const nextPlayers = playerName
             ? currentPlayers.filter((name) => name !== playerName)
