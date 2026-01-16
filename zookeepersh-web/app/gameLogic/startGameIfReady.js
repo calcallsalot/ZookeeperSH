@@ -14,6 +14,7 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
   lobbies.set(lobbyId, {
     ...lobby,
     status: "in_game",
+    players: seatOrder,
     seatOrder,
     seatByName,
     startedAt: Date.now(),
