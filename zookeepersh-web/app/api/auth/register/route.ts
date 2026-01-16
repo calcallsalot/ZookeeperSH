@@ -27,10 +27,14 @@ export async function POST(req: Request) {
     const db = client.db(); // uses DB name from MONGODB_URI
     const users = db.collection("users");
 
+    if(!nameDisplay) {
+      return NextResponse.json({ error: "Username required."}, {status: 409});
+    }
+
     const existing_email = await users.findOne({ email: emailNorm });
     const existing_username = await users.findOne({ name: nameNorm });
     if (existing_username) {
-      return NextResponse.json({ error: "Username already in use" }, { status: 409 });
+      return NextResponse.json({ error: "Username is already in use" }, { status: 409 });
     }
 
     if (existing_email) {
@@ -50,7 +54,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, userId: result.insertedId.toString() });
   } catch(err: any) {
     if (err?.code === 11000) { // mongodb duplication error theres 110001 too
-      return NextResponse.json({ error: "Email or username already in use" }, { status: 409 });
+      const key = Object.keys(err?.keyPattern ?? {})[0];
+      return NextResponse.json(
+        { error: key === "nameNorm" ? "Username already in use" : "Email already in use" },
+        { status: 409 }
+      );
     }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
