@@ -9,6 +9,7 @@ export type Lobby = {
   name?: string | null;
   hostName?: string | null;
   players?: string[];
+  seatOrder?: string[];
   status?: "open" | "in_game" | "closed";
   createdAt?: number;
 };
