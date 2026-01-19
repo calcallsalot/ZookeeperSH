@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useLobby } from "./lobby/LobbySocketContext";
 
 export default function GameLobbyHeader({
   userName,
@@ -11,6 +13,10 @@ export default function GameLobbyHeader({
   status: "loading" | "authenticated" | "unauthenticated";
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const href = pathname.startsWith("/games/table/") ? "/games" : "/";
+
+  const { myLobbyId, leaveLobby } = useLobby();
 
   return (
     <header
@@ -28,7 +34,14 @@ export default function GameLobbyHeader({
       }}
     >
       <Link
-        href="/games"
+        href={href} // inLobby ? "/games" : 
+        onClick={(e) => {
+          if (href === "/games" && myLobbyId) {
+            (e as any).preventDefault?.();
+            leaveLobby(myLobbyId);
+            router.push("/games");
+          }
+        }}
         style={{
           fontFamily: "var(--font-eskapade-fraktur)",
           fontSize: 28,
@@ -69,7 +82,12 @@ export default function GameLobbyHeader({
             placeItems: "center",
             cursor: "pointer",
           }}
-          onClick={() => router.push("/profile")} // maybe change to /settings? 
+          onClick={() => {
+            if (pathname.startsWith("/games/table/") && myLobbyId) {
+              leaveLobby(myLobbyId);
+            }
+            router.push("/profile");
+          }} // maybe change to /settings? 
         >
           <svg
             className="zk-gear"

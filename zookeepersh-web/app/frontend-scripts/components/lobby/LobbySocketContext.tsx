@@ -87,6 +87,7 @@ export type LobbySocketValue = {
 
   joinLobby: (lobbyId: string) => void;
   sitInLobby: (lobbyId: string) => void;
+  leaveLobby: (lobbyId: string) => void;
 
   sendChat: (text: string) => void;
 
@@ -140,7 +141,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       if (!pathName.startsWith("/games/table/")) {
         router.push(`/games/table/${myLobbyId}`);
       }
-    } else if (previousLobbyId && pathName.startsWith("/games/table/")) {
+    } else if (!myLobbyId && previousLobbyId && pathName.startsWith("/games/table/")) {
       router.push("/games");
     }
     lastLobbyIdRef.current = myLobbyId;
@@ -319,6 +320,15 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     socket.emit("lobby:sit", { lobbyId });
   }, []);
 
+  const leaveLobby = useCallback((lobbyId: string) => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      console.warn("[leaveLobby] socket not connected");
+      return;
+    }
+    socket.emit("lobby:leave", { lobbyId });
+  }, []);
+
   /*const value = useMemo<LobbySocketValue>(
 
     () => ({
@@ -355,9 +365,10 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
       sendChat,
       joinLobby,
-      sitInLobby,
-      createLobby,
-    }),
+       sitInLobby,
+       leaveLobby,
+       createLobby,
+     }),
 
     [
       connected,
@@ -382,9 +393,11 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
       sendChat,
       joinLobby,
-      sitInLobby,
-      createLobby,
-    ]
+       sitInLobby,
+       leaveLobby,
+       createLobby,
+     ]
+
 
   );
 

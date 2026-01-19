@@ -4,6 +4,8 @@ function registerLobbyHandlers({
   online,
   lobbies,
   playerLobby,
+  hasPresenceInLobby,
+  closeLobby,
   canPlayOrChat,
   getPresenceLobbyInfo,
   setPresenceRoleInLobby,
@@ -59,6 +61,47 @@ function registerLobbyHandlers({
 
     socket.emit("me:lobby", { lobbyId });
     socket.emit("lobby:created", { lobbyId });
+  });
+
+  socket.on("lobby:leave", ({ lobbyId } = {}) => {
+    const targetLobbyId = typeof lobbyId === "string" ? lobbyId : null;
+    if (!targetLobbyId) return;
+
+    const player = online.get(socket.id);
+    const presenceKey = player?.presenceKey ?? null;
+    const playerName = player?.name ?? null;
+    const lobbyInfo = playerLobby.get(socket.id);
+    if (!lobbyInfo || lobbyInfo.lobbyId !== targetLobbyId) {
+      socket.emit("me:lobby", { lobbyId: lobbyInfo?.lobbyId ?? null });
+      return;
+    }
+
+    playerLobby.delete(socket.id);
+    socket.emit("me:lobby", { lobbyId: null });
+
+    if (lobbyInfo.role === "player" && presenceKey) {
+      const stillInLobby = hasPresenceInLobby(presenceKey, targetLobbyId, "player");
+      if (!stillInLobby) {
+        const lobby = lobbies.get(targetLobbyId);
+        if (lobby) {
+          const isGameStarted = (lobby.status ?? "open") === "in_game";
+          if (!isGameStarted) {
+            const currentPlayers = lobby.players ?? [];
+            const nextPlayers = playerName
+              ? currentPlayers.filter((name) => name !== playerName)
+              : currentPlayers;
+            if (nextPlayers.length !== currentPlayers.length) {
+              if (nextPlayers.length === 0) {
+                closeLobby(targetLobbyId, "no-seated-players");
+              } else {
+                lobbies.set(targetLobbyId, { ...lobby, players: nextPlayers });
+                io.emit("lobbies:update", lobbyListPublic());
+              }
+            }
+          }
+        }
+      }
+    }
   });
 
   // joining lobbies
