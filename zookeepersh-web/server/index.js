@@ -223,7 +223,7 @@ io.on("connection", (socket) => {
     console.log("[io] recv:", event, args);
   });
 
-  // default presence
+  
   // default presence
   const defaultPresenceKey = `guest:${socket.id}`;
   //online.set(socket.id, { id: socket.id, name: "Guest", elo: null, authed: false });
