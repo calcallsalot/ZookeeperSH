@@ -12,11 +12,13 @@ const { MongoClient, ObjectId } = require("mongodb");
 const { startGameIfReady } = require("../app/gameLogic/startGameIfReady");
 
 const { registerPresenceHandlers } = require("./handlers/presence");
-const { registerGameChatHandlers } = require("./handlers/gameChat");
+const { registerGameChatHandlers } = require("./handlers/chat/gameChat");
+const { registerElectionHandlers } = require("./handlers/game/election");
 const { registerInitHandlers } = require("./handlers/init");
 const { registerChatHandlers } = require("./handlers/chat");
 const { registerLobbyHandlers } = require("./handlers/lobby");
 const { registerDisconnectHandlers } = require("./handlers/disconnect");
+const { makeEmitGameSystem } = require("./handlers/chat/emitGameSystem");
 
 const io = new Server(httpServer, {
   cors: {
@@ -69,21 +71,6 @@ function gameRoom(lobbyId) {
   return `game:${lobbyId}`; // can't be '' lol it has to be ``
 }
 
-async function emitGameSystem(lobbyId, text) { // not used by useful for emitting system messages to game chat
-  const msg = {
-    lobbyId,
-    kind: "system",
-    text: String(text),
-    ts: Date.now(),
-    createdAt: new Date(),
-  };
-  const res = await gameChatCol.insertOne(msg);
-  io.to(gameRoom(lobbyId)).emit("game_chat:new", {
-    id: res.insertedId.toString(),
-    ...msg,
-  });
-}
-
 function canPlayOrChat(socket) {
   const p = online.get(socket.id);
   return !!p && p.authed;
@@ -91,7 +78,7 @@ function canPlayOrChat(socket) {
 
 // --- In-memory presence store (socket.id -> player) ---
 const online = new Map(); // { id, name, elo, authed, presenceKey, updatedAt}
-// const onlineList = () => Array.from(online.values());
+// const onlineList = () => Array.from(online. values());
 // changed from this to presence because of observers
 const presenceSockets = new Map(); // presenceKey -> Set<socket.id>
 
@@ -248,6 +235,21 @@ io.on("connection", (socket) => {
     removePresenceSocket,
     onlineList,
   });
+  registerElectionHandlers({
+    io,
+    socket,
+    lobbies,
+    online,
+    playerLobby,
+    gameRoom,
+  });
+
+
+  const emitGameSystem = makeEmitGameSystem({
+    io,
+    gameChatCol,
+    gameRoom,
+  });
 
   registerGameChatHandlers({
     io,
@@ -257,6 +259,7 @@ io.on("connection", (socket) => {
     online,
     gameChatCol,
     gameRoom,
+    emitGameSystem,
   });
 
   registerInitHandlers({

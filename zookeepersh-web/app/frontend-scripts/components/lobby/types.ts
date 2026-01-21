@@ -12,6 +12,7 @@ export type Lobby = {
   seatOrder?: string[];
   status?: "open" | "in_game" | "closed";
   createdAt?: number;
+  gameState?: any; // probably need to change from any later
 };
 
 

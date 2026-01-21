@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { io, type Socket } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { Lobby, OnlinePlayer } from "./types";
@@ -45,7 +45,7 @@ export type GameChatMessage = {
   userName?: string | null;
   seat?: number | null;
   elo?: number | null;
-  observer?: | boolean;
+  observer?: boolean;
   ts: number;
 };
 
@@ -67,6 +67,9 @@ export type LobbySocketValue = {
   chatMessages: ChatMessage[];
   canChat: boolean;
   myName: string;
+  
+  // expose socket to table-clietto emit game events
+  socket: Socket | null;
 
   // game chat
   gameChatMessages: GameChatMessage[];
@@ -100,6 +103,8 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
   const router = useRouter();
 
   const socketRef = useRef<Socket | null>(null);
+  const [socketState, setSocketState] = useState<Socket | null>(null);
+  
   const [loadingOnlinePlayers, setLoadingOnlinePlayers] = useState(true);
 
   const [connected, setConnected] = useState(false);
@@ -181,6 +186,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     });
 
     socketRef.current = socket;
+    setSocketState(socket);
 
     socket.on("connect", () => {
       setConnected(true);
@@ -259,12 +265,20 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       setGameChatMessages((prev) => [...prev, msg]);
     });
 
+    // game state 
+
+    socket.on("game:state", ({ lobbyId, gameState }: { lobbyId: string; gameState: any }) => {
+      if (typeof lobbyId !== "string") return;
+      setLobbies((prev) => prev.map((l) => (l.id === lobbyId ? { ...l, gameState } : l)));
+    });
+
 
 
     return () => {
       socket.off();
       socket.disconnect();
       socketRef.current = null;
+      setSocketState(null);
     };
   }, []);
 
@@ -276,12 +290,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
     const name = session?.user?.name ?? session?.user?.email ?? "Guest";
     const authed = status === "authenticated";
     const sessionUser = session?.user as { elo?: number } | undefined;
-    const elo = authed // very confusing you're gonna have to edit this later
-      ? typeof sessionUser?.elo === "number"
-        ? sessionUser.elo
-        : 1600
-      : null;
-
+    const elo = authed ? (typeof sessionUser?.elo === "number" ? sessionUser.elo : 1600) : null; // much neater
     socket.emit("presence:set", {
        name, 
        authed,
@@ -349,6 +358,9 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       lobbies,
       onlinePlayers,
       loadingOnlinePlayers,
+
+      socket: socketState,
+
       // lobby chat
       chatMessages,
       canChat,
@@ -376,6 +388,7 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       lobbies,
       onlinePlayers,
       loadingOnlinePlayers,
+      socketState,
 
       // lobby chat
       chatMessages,

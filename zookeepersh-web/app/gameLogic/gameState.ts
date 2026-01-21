@@ -7,3 +7,4 @@ export function isGameStarted(lobby: Lobby | undefined | null): boolean {
 export function shouldShowSeat(lobby: Lobby | undefined | null): boolean {
   return isGameStarted(lobby);
 }
+  

@@ -4,12 +4,46 @@ import type { CSSProperties } from "react";
 
 const DEFAULT_CARDBACK_BG = "/images/card_backs/default_cardback.png";
 
+const ELECTION_BALLOT = "/election_cards/ballot.png";
+const ELECTION_JA = "/election_cards/ja.png";
+const ELECTION_NEIN = "/election_cards/nein.png";
+
+const PRESIDENT_ROLE = "/images/public_roles/president_role.png";
+const CHANCELLOR_ROLE = "/images/public_roles/chancellor_role.png";
+
+type Vote = "ja" | "nein";
+
 type PlayerSlot = {
   name: string;
 };
 
+function electionBackSrc(phase: string | undefined, vote: Vote | null | undefined) {
+  if (phase === "election_voting") return ELECTION_BALLOT;
+  if (phase === "election_reveal") {
+    if (vote === "ja") return ELECTION_JA;
+    if (vote === "nein") return ELECTION_NEIN;
+    return ELECTION_BALLOT;
+  }
+  return null;
+}
 
-function CardBackRect({ w, h }: { w: number; h: number }) {
+function CardBackRect({
+  w,
+  h,
+  src,
+  flipToSrc,
+  flip,
+}: {
+  w: number;
+  h: number;
+  src?: string;
+  flipToSrc?: string;
+  flip?: boolean;
+}) {
+  const front = src ?? DEFAULT_CARDBACK_BG;
+  const back = flipToSrc ?? front;
+  const doFlip = Boolean(flip && flipToSrc);
+
   return (
     <div
       style={{
@@ -17,26 +51,200 @@ function CardBackRect({ w, h }: { w: number; h: number }) {
         height: h,
         borderRadius: 10,
         overflow: "hidden",
-        background: "rgba(0,0,0,0.35)", // letterbox background (optional)
+        background: "rgba(0,0,0,0.35)",
+        perspective: 800,
       }}
     >
-      <img
-        src={DEFAULT_CARDBACK_BG}
-        alt=""
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",      // shows entire image (no crop)
-          objectPosition: "center",
-          display: "block",
-        }}
-      />
+      {!doFlip ? (
+        <img
+          src={front}
+          alt=""
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            objectPosition: "center",
+            display: "block",
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            transformStyle: "preserve-3d",
+            transition: "transform 520ms ease",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          <img
+            src={front}
+            alt=""
+            draggable={false}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              objectPosition: "center",
+              display: "block",
+              backfaceVisibility: "hidden",
+            }}
+          />
+          <img
+            src={back}
+            alt=""
+            draggable={false}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              objectPosition: "center",
+              display: "block",
+              backfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function AvatarTile({ name }: { name: string }) {
+function RoleBadges({
+  isPresident,
+  isChancellor,
+}: {
+  isPresident?: boolean;
+  isChancellor?: boolean;
+}) {
+  if (!isPresident && !isChancellor) return null;
+
+  // bottom-center stack, slightly “badge-like”
+  return (
+    <div
+      style={{
+        pointerEvents: "none",
+        position: "absolute",
+        left: "50%",
+        bottom: 6,
+        transform: "translateX(-50%)",
+        display: "flex",
+        gap: 6,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "3px 6px",
+        borderRadius: 999,
+        background: "rgba(0,0,0,0.45)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        boxShadow: "0 6px 14px rgba(0,0,0,0.35)",
+      }}
+    >
+      {isPresident ? (
+        <img
+          src={PRESIDENT_ROLE}
+          alt="President"
+          draggable={false}
+          style={{ width: 22, height: 22, display: "block" }}
+        />
+      ) : null}
+      {isChancellor ? (
+        <img
+          src={CHANCELLOR_ROLE}
+          alt="Chancellor"
+          draggable={false}
+          style={{ width: 22, height: 22, display: "block" }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ClickableCardWrap({
+  enabled,
+  onClick,
+  children,
+}: {
+  enabled: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role={enabled ? "button" : undefined}
+      tabIndex={enabled ? 0 : -1}
+      onClick={enabled ? onClick : undefined}
+      onKeyDown={
+        enabled
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      style={{
+        position: "relative",
+        width: 86,
+        height: 112,
+        borderRadius: 10,
+        outline: "none",
+        cursor: enabled ? "pointer" : "default",
+        filter: enabled ? "none" : "none",
+      }}
+    >
+      {children}
+      {enabled ? (
+        <div
+          style={{
+            pointerEvents: "none",
+            position: "absolute",
+            inset: 0,
+            borderRadius: 10,
+            border: "2px solid rgba(255,255,255,0.28)",
+            boxShadow: "0 0 0 3px rgba(0,0,0,0.25)",
+            opacity: 0,
+            transition: "opacity 140ms ease",
+          }}
+          // simple hover effect without CSS files: use onMouseEnter/Leave? (kept minimal)
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function AvatarTile({
+  seat,
+  name,
+  isChancellor,
+  isPresident,
+  electionPhase,
+  electionVote,
+  nominateEnabled,
+  onNominate,
+}: {
+  seat: number;
+  name: string;
+  isChancellor?: boolean;
+  isPresident?: boolean;
+  electionPhase?: string;
+  electionVote?: Vote | null;
+
+  nominateEnabled?: boolean;
+  onNominate?: (seat: number) => void;
+}) {
+  const electionSrc = electionBackSrc(electionPhase, electionVote);
+  const isReveal = electionPhase === "election_reveal";
+  const revealSrc = isReveal ? electionSrc : null;
+
+  const canClick = Boolean(nominateEnabled && onNominate && !isPresident);
+
   return (
     <div style={{ width: 86 }}>
       <div
@@ -50,23 +258,26 @@ function AvatarTile({ name }: { name: string }) {
           overflow: "hidden",
           textOverflow: "ellipsis",
         }}
-        title={name}
+        title={`${seat}. ${name}`}
       >
         {name}
       </div>
 
-      <CardBackRect w={86} h={112} />
+      <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
+        <CardBackRect
+          w={86}
+          h={112}
+          src={electionPhase === "election_voting" ? ELECTION_BALLOT : electionSrc ?? DEFAULT_CARDBACK_BG}
+          flipToSrc={revealSrc ?? undefined}
+          flip={isReveal}
+        />
+        <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
+      </ClickableCardWrap>
     </div>
   );
 }
 
-function SitDownTile({
-  onSit,
-  disabled,
-}: {
-  onSit?: () => void;
-  disabled?: boolean;
-}) {
+function SitDownTile({ onSit, disabled }: { onSit?: () => void; disabled?: boolean }) {
   return (
     <div style={{ width: 86 }}>
       <div
@@ -109,20 +320,38 @@ function SitDownTile({
 }
 
 function CardTile({
-
   seat,
   name,
   isChancellor,
   isPresident,
+  electionPhase,
+  electionVote,
+
+  nominateEnabled,
+  onNominate,
 }: {
   seat: number;
   name: string;
   isChancellor?: boolean;
   isPresident?: boolean;
+  electionPhase?: string;
+  electionVote?: Vote | null;
+
+  nominateEnabled?: boolean;
+  onNominate?: (seat: number) => void;
 }) {
+  const electionSrc = electionBackSrc(electionPhase, electionVote);
+  const isVoting = electionPhase === "election_voting";
+  const isReveal = electionPhase === "election_reveal";
+
+  const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
+  const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
+
+  // president can’t nominate themselves (typical rule), so disable click on president seat
+  const canClick = Boolean(nominateEnabled && onNominate && !isPresident);
+
   return (
     <div style={{ width: 86 }}>
-      {/* name */}
       <div
         style={{
           textAlign: "center",
@@ -139,52 +368,10 @@ function CardTile({
         {seat}. {name}
       </div>
 
-      {/* image-only card */}
-      <div style={{ position: "relative" }}>
-        <CardBackRect w={86} h={112} />
-        {/* optional badges */}
-        {isPresident ? (
-          <div
-            style={{
-              position: "absolute",
-              left: 6,
-              top: 6,
-              padding: "4px 6px",
-              fontSize: 10,
-              fontWeight: 900,
-              letterSpacing: 0.7,
-              borderRadius: 8,
-              background: "rgba(20, 80, 160, 0.88)",
-              border: "1px solid rgba(255,255,255,0.25)",
-              textShadow: "0 2px 0 rgba(0,0,0,0.4)",
-            }}
-          >
-            PRESIDENT
-          </div>
-        ) : null}
-
-        {isChancellor ? (
-          <div
-            style={{
-              position: "absolute",
-              left: 6,
-              right: 6,
-              bottom: 6,
-              padding: "5px 6px",
-              textAlign: "center",
-              fontSize: 10,
-              fontWeight: 900,
-              letterSpacing: 0.7,
-              borderRadius: 8,
-              background: "rgba(150, 20, 20, 0.88)",
-              border: "1px solid rgba(255,255,255,0.25)",
-              textShadow: "0 2px 0 rgba(0,0,0,0.4)",
-            }}
-          >
-            CHANCELLOR
-          </div>
-        ) : null}
-      </div>
+      <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
+        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} />
+        <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
+      </ClickableCardWrap>
     </div>
   );
 }
@@ -192,8 +379,16 @@ function CardTile({
 export default function PlayerListView({
   playerCount,
   players,
-  chancellorSeat, // 1..7
-  presidentSeat,  // 1..7 (optional)
+  chancellorSeat,
+  presidentSeat,
+
+  electionPhase,
+  electionVotes,
+
+  // NEW: nomination
+  nominateEnabled,
+  onNominateChancellor,
+
   showSitButton,
   onSit,
   sitDisabled,
@@ -202,6 +397,14 @@ export default function PlayerListView({
   players?: PlayerSlot[];
   chancellorSeat?: number;
   presidentSeat?: number;
+
+  electionPhase?: string;
+  electionVotes?: Record<number, Vote | null>;
+
+  // If true, tiles become clickable (except president seat) and call onNominateChancellor(seat)
+  nominateEnabled?: boolean;
+  onNominateChancellor?: (seat: number) => void;
+
   showSitButton?: boolean;
   onSit?: () => void;
   sitDisabled?: boolean;
@@ -210,9 +413,9 @@ export default function PlayerListView({
 
   const fallbackName = (index: number) => `Player${index + 1}`;
   const getName = (index: number) => players?.[index]?.name ?? fallbackName(index);
+
   const showSeatButton = Boolean(showSitButton && clamped < 7);
   const sitButtonDisabled = Boolean(sitDisabled || !onSit);
-
 
   const containerStyle: CSSProperties = {
     display: "flex",
@@ -222,7 +425,10 @@ export default function PlayerListView({
     flexWrap: "wrap",
   };
 
-  // FULL (7) -> card view
+  const handleNominate = (seat: number) => {
+    onNominateChancellor?.(seat);
+  };
+
   if (clamped === 7) {
     return (
       <div style={containerStyle}>
@@ -235,24 +441,36 @@ export default function PlayerListView({
               name={getName(index)}
               isChancellor={chancellorSeat === seat}
               isPresident={presidentSeat === seat}
+              electionPhase={electionPhase}
+              electionVote={electionVotes?.[seat] ?? null}
+              nominateEnabled={Boolean(nominateEnabled)}
+              onNominate={handleNominate}
             />
           );
         })}
-
       </div>
     );
   }
 
-  // NOT FULL -> avatar view
   return (
     <div style={containerStyle}>
-      {Array.from({ length: clamped }).map((_, index) => (
-        <AvatarTile key={index} name={getName(index)} />
-      ))}
-      {showSeatButton ? (
-        <SitDownTile onSit={onSit} disabled={sitButtonDisabled} />
-      ) : null}
+      {Array.from({ length: clamped }).map((_, index) => {
+        const seat = index + 1;
+        return (
+          <AvatarTile
+            key={seat}
+            seat={seat}
+            name={getName(index)}
+            isChancellor={chancellorSeat === seat}
+            isPresident={presidentSeat === seat}
+            electionPhase={electionPhase}
+            electionVote={electionVotes?.[seat] ?? null}
+            nominateEnabled={Boolean(nominateEnabled)}
+            onNominate={handleNominate}
+          />
+        );
+      })}
+      {showSeatButton ? <SitDownTile onSit={onSit} disabled={sitButtonDisabled} /> : null}
     </div>
   );
 }
-

@@ -6,6 +6,7 @@ function registerGameChatHandlers({
   online,
   gameChatCol,
   gameRoom,
+  emitGameSystem,
 }) {
   // lobby chat by {lobbyId}
   socket.on("game_chat:join", async ({ lobbyId }) => {
