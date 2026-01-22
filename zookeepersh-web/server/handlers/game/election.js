@@ -61,16 +61,27 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     policyDeck: publicizePolicyDeck(gameState.policyDeck),
   };
 
+  // Safe to expose: only whether a vote was cast (not which vote).
+  const rawVotes = gameState?.election?.votes ?? {};
+  const voteCast = {};
+  for (const [k, v] of Object.entries(rawVotes)) {
+    voteCast[Number(k)] = v != null;
+  }
+
+  safe.election = {
+    ...gameState.election,
+    voteCast,
+  };
+
   // Hide other players' votes until reveal.
   if (gameState.phase === "election_voting") {
-    const rawVotes = gameState?.election?.votes ?? {};
     const maskedVotes = {};
     for (const [k, v] of Object.entries(rawVotes)) {
       const s = Number(k);
       maskedVotes[s] = role === "player" && seat != null && s === seat ? v : null;
     }
     safe.election = {
-      ...gameState.election,
+      ...safe.election,
       votes: maskedVotes,
     };
   }
@@ -100,16 +111,8 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
   return safe;
 }
 
-function emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom }) {
+function emitGameState({ io, lobbyId, lobby, playerLobby, online }) {
   if (!lobby?.gameState) return;
-
-  // Public state to the game room (observers, spectators, etc.)
-  if (typeof gameRoom === "function") {
-    io.to(gameRoom(lobbyId)).emit("game:state", {
-      lobbyId,
-      gameState: sanitizeGameStateForRecipient(lobby.gameState, null, "observer"),
-    });
-  }
 
   for (const [socketId, info] of playerLobby.entries()) {
     if (info?.lobbyId !== lobbyId) continue;
@@ -167,7 +170,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     if (!lobby) return;
     if (lobby.status !== "in_game") return;
     ensureGameState(lobby);
-    emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom });
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 
   socket.on("game:nominateChancellor", ({ lobbyId, chancellorSeat } = {}) => {
@@ -204,7 +207,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     gs.election.revealed = false;
     gs.election.passed = null;
 
-    emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom });
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 
   socket.on("game:castVote", ({ lobbyId, vote } = {}) => {
@@ -233,7 +236,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     const allIn = aliveSeats.every((s) => gs.election.votes[s] != null);
 
     if (!allIn) {
-      emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom });
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
       return;
     }
 
@@ -245,7 +248,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     gs.election.revealed = true;
     gs.election.passed = passed;
 
-    emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom });
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
 
     // auto-advance (optional)
     setTimeout(() => {
@@ -260,7 +263,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         l.gameState.legislative = { presidentPolicies: drawn };
         l.gameState.phase = "legislative_president";
 
-        emitGameState({ io, lobbyId, lobby: l, playerLobby, online, gameRoom });
+        emitGameState({ io, lobbyId, lobby: l, playerLobby, online });
         return;
       }
 
@@ -278,7 +281,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
       l.gameState.election.revealed = false;
       l.gameState.election.passed = null;
 
-      emitGameState({ io, lobbyId, lobby: l, playerLobby, online, gameRoom });
+      emitGameState({ io, lobbyId, lobby: l, playerLobby, online });
     }, 1200);
   });
 
@@ -312,7 +315,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     gs.phase = "legislative_chancellor";
     gs.legislative = { chancellorPolicies: policies };
 
-    emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom });
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 
   socket.on("game:legislative:chancellorEnact", ({ lobbyId, enactIndex } = {}) => {
@@ -365,7 +368,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
     gs.legislative = null;
 
-    emitGameState({ io, lobbyId, lobby, playerLobby, online, gameRoom });
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 }
 
