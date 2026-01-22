@@ -1,5 +1,7 @@
 export type Vote = "ja" | "nein";
 
+export type PolicyType = "liberal" | "fascist";
+
 export type GamePhase =
   | "election_nomination"
   | "election_voting"
@@ -31,4 +33,17 @@ export type GameState = {
   phase: GamePhase;
   players: PlayerState[];
   election: ElectionState;
+
+  // policy deck + enactments
+  policyDeck: {
+    drawPile: PolicyType[];
+    discardPile: PolicyType[];
+  };
+  enactedPolicies: { liberal: number; fascist: number };
+  lastEnactedPolicy?: PolicyType;
+
+  legislative: {
+    presidentPolicies?: PolicyType[];
+    chancellorPolicies?: PolicyType[];
+  } | null;
 };

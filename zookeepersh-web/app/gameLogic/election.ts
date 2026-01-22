@@ -1,4 +1,5 @@
 import type { ElectionState, GameState, PlayerState, Vote } from "./types";
+import { createInitialPolicyDeck } from "./policyDeck";
 
 function aliveSeats(players: PlayerState[]) {
   return players.filter((p) => p.alive).map((p) => p.seat);
@@ -18,6 +19,10 @@ export function initGameState(players: PlayerState[]): GameState {
       passed: null,
       requiredYes: 4,
     },
+
+    policyDeck: createInitialPolicyDeck(),
+    enactedPolicies: { liberal: 0, fascist: 0 },
+    legislative: null,
   };
 }
 

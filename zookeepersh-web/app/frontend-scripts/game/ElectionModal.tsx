@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export type Vote = "ja" | "nein";
 
@@ -23,6 +23,11 @@ export default function ElectionModal({
   onVote: (vote: Vote) => void;
 }) {
   const [sent, setSent] = useState<Vote | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setSent(null);
+  }, [open]);
 
   const alreadyVoted = useMemo(() => {
     if (!mySeat) return false;

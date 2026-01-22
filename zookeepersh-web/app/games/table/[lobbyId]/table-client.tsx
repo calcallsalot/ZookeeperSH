@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import BoardView from "../../../frontend-scripts/Board/BoardView";
 import PlayerListView from "../../../frontend-scripts/Board/playerListView";
 import { useLobby } from "../../../frontend-scripts/components/lobby/LobbySocketContext";
@@ -15,7 +15,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
   // NOTE: this assumes your context exposes `socket`.
   // If yours is called differently, rename here.
-  const { lobbies, myLobbyId, sitInLobby, myName, canChat, connected, socket } = useLobby(); // socket not defined in lobbysocketcontext.tsx
+  const { lobbies, myLobbyId, joinLobby, sitInLobby, myName, canChat, connected, socket } = useLobby();
 
   const lobby = useMemo(() => lobbies.find((l) => l.id === lobbyId), [lobbies, lobbyId]);
 
@@ -38,8 +38,22 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
   const playersForView = lobbyPlayerNames.map((name) => ({ name }));
 
+  // Ensure this socket is actually registered in this lobby server-side.
+  // Without this, a refresh / direct navigation can leave you “visually seated”
+  // (name appears in lobby.players) but server treats the socket as not in-lobby.
+  useEffect(() => {
+    if (!connected) return;
+    if (myLobbyId === lobbyId) return;
+    joinLobby(lobbyId);
+  }, [connected, joinLobby, lobbyId, myLobbyId]);
+
+  useEffect(() => {
+    if (!socket || !connected || !gameStarted) return;
+    socket.emit("game:state:request", { lobbyId });
+  }, [socket, connected, lobbyId, gameStarted]);
+
   // gameState is assumed to be attached to lobby by your socket handler
-  const gameState: any = (lobby as any)?.gameState ?? null;
+  const gameState: any = gameStarted ? (lobby as any)?.gameState ?? null : null;
 
   const election = gameState?.election
     ? {
@@ -47,6 +61,16 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
         presidentSeat: gameState.election.presidentSeat,
         nominatedChancellorSeat: gameState.election.nominatedChancellorSeat,
         votes: gameState.election.votes,
+      }
+    : undefined;
+
+  const legislative = gameState
+    ? {
+        phase: gameState.phase,
+        presidentSeat: gameState.election?.presidentSeat ?? 1,
+        chancellorSeat: gameState.election?.nominatedChancellorSeat ?? null,
+        presidentPolicies: gameState.legislative?.presidentPolicies ?? null,
+        chancellorPolicies: gameState.legislative?.chancellorPolicies ?? null,
       }
     : undefined;
 
@@ -75,11 +99,18 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
           <div style={{ height: "100%", color: "white" }}>
             <BoardView
               playerCount={playerCount}
-              election={election}
+              election={gameStarted ? election : undefined}
+              legislative={gameStarted ? legislative : undefined}
               mySeat={mySeat}
               onVote={(vote) => {
                 // server authoritative vote
                 socket?.emit?.("game:castVote", { lobbyId, vote });
+              }}
+              onPresidentDiscard={(discardIndex) => {
+                socket?.emit?.("game:legislative:presidentDiscard", { lobbyId, discardIndex });
+              }}
+              onChancellorEnact={(enactIndex) => {
+                socket?.emit?.("game:legislative:chancellorEnact", { lobbyId, enactIndex });
               }}
             />
 
@@ -90,10 +121,21 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 showSitButton={showSitButton}
                 sitDisabled={sitDisabled}
                 onSit={showSitButton ? () => sitInLobby(lobbyId) : undefined}
-                presidentSeat={election?.presidentSeat}
-                chancellorSeat={election?.nominatedChancellorSeat ?? undefined}
-                electionPhase={gameState?.phase}
-                electionVotes={gameState?.election?.votes}
+                presidentSeat={gameStarted ? election?.presidentSeat : undefined}
+                chancellorSeat={gameStarted ? election?.nominatedChancellorSeat ?? undefined : undefined}
+                electionPhase={gameStarted ? gameState?.phase : undefined}
+                electionVotes={gameStarted ? gameState?.election?.votes : undefined}
+                nominateEnabled={
+                  Boolean(
+                    gameStarted &&
+                      gameState?.phase === "election_nomination" &&
+                      mySeat != null &&
+                      election?.presidentSeat === mySeat
+                  )
+                }
+                onNominateChancellor={(seat) => {
+                  socket?.emit?.("game:nominateChancellor", { lobbyId, chancellorSeat: seat });
+                }}
               />
             </div>
           </div>

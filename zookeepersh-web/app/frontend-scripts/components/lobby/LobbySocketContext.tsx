@@ -227,7 +227,12 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
       setMyLobbyId(lobbyId ?? null);
     });
 
-    socket.on("lobbies:update", (list: Lobby[]) => setLobbies(list));
+    socket.on("lobbies:update", (list: Lobby[]) => {
+      setLobbies((prev) => {
+        const byId = new Map(prev.map((l) => [l.id, l]));
+        return (list ?? []).map((l) => ({ ...byId.get(l.id), ...l }));
+      });
+    });
 
     socket.on("lobby:created", (payload: { lobbyId: string }) => {
       console.log("[socket] lobby:created received:", payload);
@@ -269,7 +274,13 @@ export function LobbySocketProvider({ children }: { children: React.ReactNode })
 
     socket.on("game:state", ({ lobbyId, gameState }: { lobbyId: string; gameState: any }) => {
       if (typeof lobbyId !== "string") return;
-      setLobbies((prev) => prev.map((l) => (l.id === lobbyId ? { ...l, gameState } : l)));
+      setLobbies((prev) => {
+        const idx = prev.findIndex((l) => l.id === lobbyId);
+        if (idx === -1) return [...prev, { id: lobbyId, gameState } as Lobby];
+        const next = [...prev];
+        next[idx] = { ...next[idx], gameState };
+        return next;
+      });
     });
 
 

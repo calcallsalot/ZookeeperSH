@@ -1,4 +1,5 @@
 const { shuffle } = require("./shuffle");
+const { createInitialPolicyDeck } = require("./policyDeck");
 
 function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emitGameSystem }) {
   const lobby = lobbies.get(lobbyId);
@@ -27,6 +28,11 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
       passed: null,
       requiredYes: 4,
     },
+
+    // policy deck + enacted policies
+    policyDeck: createInitialPolicyDeck(),
+    enactedPolicies: { liberal: 0, fascist: 0 },
+    legislative: null,
   };
 
   // store updated lobby
@@ -48,7 +54,14 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
   io.to(gameRoom(lobbyId)).emit("game:started", { lobbyId, seatByName, seatOrder });
 
   // emit initial game state so clients can render election phase immediately
-  io.to(gameRoom(lobbyId)).emit("game:state", { lobbyId, gameState });
+  const publicGameState = {
+    ...gameState,
+    policyDeck: {
+      drawCount: gameState.policyDeck?.drawPile?.length ?? 0,
+      discardCount: gameState.policyDeck?.discardPile?.length ?? 0,
+    },
+  };
+  io.to(gameRoom(lobbyId)).emit("game:state", { lobbyId, gameState: publicGameState });
 
   if (emitGameSystem) emitGameSystem(lobbyId, "The game begins").catch(() => {});
 }

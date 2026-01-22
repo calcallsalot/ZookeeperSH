@@ -1,12 +1,12 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 const DEFAULT_CARDBACK_BG = "/images/card_backs/default_cardback.png";
 
-const ELECTION_BALLOT = "/election_cards/ballot.png";
-const ELECTION_JA = "/election_cards/ja.png";
-const ELECTION_NEIN = "/election_cards/nein.png";
+const ELECTION_BALLOT = "/images/election_cards/ballot.png";
+const ELECTION_JA = "/images/election_cards/ja.png";
+const ELECTION_NEIN = "/images/election_cards/nein.png";
 
 const PRESIDENT_ROLE = "/images/public_roles/president_role.png";
 const CHANCELLOR_ROLE = "/images/public_roles/chancellor_role.png";
@@ -42,7 +42,25 @@ function CardBackRect({
 }) {
   const front = src ?? DEFAULT_CARDBACK_BG;
   const back = flipToSrc ?? front;
-  const doFlip = Boolean(flip && flipToSrc);
+  const hasBack = Boolean(flipToSrc);
+
+  const [flipped, setFlipped] = useState(false);
+
+  useEffect(() => {
+    if (!hasBack) {
+      setFlipped(false);
+      return;
+    }
+
+    if (!flip) {
+      setFlipped(false);
+      return;
+    }
+
+    setFlipped(false);
+    const t = setTimeout(() => setFlipped(true), 60);
+    return () => clearTimeout(t);
+  }, [flip, hasBack, flipToSrc]);
 
   return (
     <div
@@ -55,7 +73,7 @@ function CardBackRect({
         perspective: 800,
       }}
     >
-      {!doFlip ? (
+      {!hasBack ? (
         <img
           src={front}
           alt=""
@@ -76,7 +94,7 @@ function CardBackRect({
             height: "100%",
             transformStyle: "preserve-3d",
             transition: "transform 520ms ease",
-            transform: "rotateY(180deg)",
+            transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
           }}
         >
           <img
@@ -125,7 +143,7 @@ function RoleBadges({
 }) {
   if (!isPresident && !isChancellor) return null;
 
-  // bottom-center stack, slightly “badge-like”
+  // Bottom-center overlay (no pill background; preserve icon aspect ratio)
   return (
     <div
       style={{
@@ -138,11 +156,7 @@ function RoleBadges({
         gap: 6,
         alignItems: "center",
         justifyContent: "center",
-        padding: "3px 6px",
-        borderRadius: 999,
-        background: "rgba(0,0,0,0.45)",
-        border: "1px solid rgba(255,255,255,0.18)",
-        boxShadow: "0 6px 14px rgba(0,0,0,0.35)",
+        filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.75))",
       }}
     >
       {isPresident ? (
@@ -150,7 +164,7 @@ function RoleBadges({
           src={PRESIDENT_ROLE}
           alt="President"
           draggable={false}
-          style={{ width: 22, height: 22, display: "block" }}
+          style={{ height: 20, width: "auto", maxWidth: 70, objectFit: "contain", display: "block" }}
         />
       ) : null}
       {isChancellor ? (
@@ -158,7 +172,7 @@ function RoleBadges({
           src={CHANCELLOR_ROLE}
           alt="Chancellor"
           draggable={false}
-          style={{ width: 22, height: 22, display: "block" }}
+          style={{ height: 20, width: "auto", maxWidth: 70, objectFit: "contain", display: "block" }}
         />
       ) : null}
     </div>
@@ -172,7 +186,7 @@ function ClickableCardWrap({
 }: {
   enabled: boolean;
   onClick?: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div
@@ -240,8 +254,11 @@ function AvatarTile({
   onNominate?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
+  const isVoting = electionPhase === "election_voting";
   const isReveal = electionPhase === "election_reveal";
-  const revealSrc = isReveal ? electionSrc : null;
+
+  const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
+  const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
   const canClick = Boolean(nominateEnabled && onNominate && !isPresident);
 
@@ -264,13 +281,7 @@ function AvatarTile({
       </div>
 
       <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
-        <CardBackRect
-          w={86}
-          h={112}
-          src={electionPhase === "election_voting" ? ELECTION_BALLOT : electionSrc ?? DEFAULT_CARDBACK_BG}
-          flipToSrc={revealSrc ?? undefined}
-          flip={isReveal}
-        />
+        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
     </div>
