@@ -17,6 +17,24 @@ type PlayerSlot = {
   name: string;
 };
 
+let SPIN_KEYFRAMES_READY = false;
+function ensureSpinKeyframes() {
+  if (SPIN_KEYFRAMES_READY) return;
+  if (typeof document === "undefined") return;
+
+  const id = "zk_spin_keyframes";
+  if (document.getElementById(id)) {
+    SPIN_KEYFRAMES_READY = true;
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.id = id;
+  style.textContent = "@keyframes zk_spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+  document.head.appendChild(style);
+  SPIN_KEYFRAMES_READY = true;
+}
+
 function electionBackSrc(phase: string | undefined, vote: Vote | null | undefined) {
   if (phase === "election_voting") return ELECTION_BALLOT;
   if (phase === "election_reveal") {
@@ -33,16 +51,22 @@ function CardBackRect({
   src,
   flipToSrc,
   flip,
+  pending,
 }: {
   w: number;
   h: number;
   src?: string;
   flipToSrc?: string;
   flip?: boolean;
+  pending?: boolean;
 }) {
   const front = src ?? DEFAULT_CARDBACK_BG;
   const back = flipToSrc ?? front;
   const hasBack = Boolean(flipToSrc);
+
+  useEffect(() => {
+    ensureSpinKeyframes();
+  }, []);
 
   const [flipped, setFlipped] = useState(false);
 
@@ -65,6 +89,7 @@ function CardBackRect({
   return (
     <div
       style={{
+        position: "relative",
         width: w,
         height: h,
         borderRadius: 10,
@@ -130,6 +155,26 @@ function CardBackRect({
           />
         </div>
       )}
+
+      {pending ? (
+        <div
+          aria-hidden="true"
+          style={{
+            pointerEvents: "none",
+            position: "absolute",
+            right: 6,
+            top: 6,
+            width: 16,
+            height: 16,
+            borderRadius: 999,
+            border: "2px solid rgba(255,255,255,0.22)",
+            borderTopColor: "rgba(255,255,255,0.9)",
+            animation: "zk_spin 850ms linear infinite",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.55)",
+            background: "rgba(0,0,0,0.25)",
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -150,8 +195,8 @@ function RoleBadges({
         pointerEvents: "none",
         position: "absolute",
         left: "50%",
-        bottom: 6,
-        transform: "translateX(-50%)",
+        bottom: 0,
+        transform: "translateX(-49%)",
         display: "flex",
         gap: 6,
         alignItems: "center",
@@ -164,7 +209,7 @@ function RoleBadges({
           src={PRESIDENT_ROLE}
           alt="President"
           draggable={false}
-          style={{ height: 20, width: "auto", maxWidth: 70, objectFit: "contain", display: "block" }}
+          style={{ height: 25, width: "auto", maxWidth: 100, objectFit: "contain", display: "block" }}
         />
       ) : null}
       {isChancellor ? (
@@ -240,6 +285,7 @@ function AvatarTile({
   isPresident,
   electionPhase,
   electionVote,
+  hasVoted,
   nominateEnabled,
   onNominate,
 }: {
@@ -249,6 +295,7 @@ function AvatarTile({
   isPresident?: boolean;
   electionPhase?: string;
   electionVote?: Vote | null;
+  hasVoted?: boolean;
 
   nominateEnabled?: boolean;
   onNominate?: (seat: number) => void;
@@ -256,6 +303,8 @@ function AvatarTile({
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
   const isReveal = electionPhase === "election_reveal";
+
+  const pending = Boolean(isVoting && !hasVoted);
 
   const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
   const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
@@ -281,7 +330,7 @@ function AvatarTile({
       </div>
 
       <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
-        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} />
+        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
     </div>
@@ -338,6 +387,8 @@ function CardTile({
   electionPhase,
   electionVote,
 
+  hasVoted,
+
   nominateEnabled,
   onNominate,
 }: {
@@ -348,12 +399,16 @@ function CardTile({
   electionPhase?: string;
   electionVote?: Vote | null;
 
+  hasVoted?: boolean;
+
   nominateEnabled?: boolean;
   onNominate?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
   const isReveal = electionPhase === "election_reveal";
+
+  const pending = Boolean(isVoting && !hasVoted);
 
   const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
   const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
@@ -380,7 +435,7 @@ function CardTile({
       </div>
 
       <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
-        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} />
+        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
     </div>
@@ -395,6 +450,7 @@ export default function PlayerListView({
 
   electionPhase,
   electionVotes,
+  electionVoteCast,
 
   // NEW: nomination
   nominateEnabled,
@@ -411,6 +467,7 @@ export default function PlayerListView({
 
   electionPhase?: string;
   electionVotes?: Record<number, Vote | null>;
+  electionVoteCast?: Record<number, boolean>;
 
   // If true, tiles become clickable (except president seat) and call onNominateChancellor(seat)
   nominateEnabled?: boolean;
@@ -454,6 +511,7 @@ export default function PlayerListView({
               isPresident={presidentSeat === seat}
               electionPhase={electionPhase}
               electionVote={electionVotes?.[seat] ?? null}
+              hasVoted={electionVoteCast?.[seat] === true}
               nominateEnabled={Boolean(nominateEnabled)}
               onNominate={handleNominate}
             />
@@ -476,6 +534,7 @@ export default function PlayerListView({
             isPresident={presidentSeat === seat}
             electionPhase={electionPhase}
             electionVote={electionVotes?.[seat] ?? null}
+            hasVoted={electionVoteCast?.[seat] === true}
             nominateEnabled={Boolean(nominateEnabled)}
             onNominate={handleNominate}
           />

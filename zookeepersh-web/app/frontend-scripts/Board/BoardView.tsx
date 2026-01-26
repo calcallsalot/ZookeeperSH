@@ -30,7 +30,10 @@ export default function BoardView({
   onPresidentDiscard,
   onChancellorEnact,
 }: BoardViewProps) {
-  const boardImages = [BOARD_IMAGES.liberal, BOARD_IMAGES.fascist];
+  const boards = [
+    { key: "liberal" as const, src: BOARD_IMAGES.liberal },
+    { key: "fascist" as const, src: BOARD_IMAGES.fascist },
+  ];
   const showElectionModal = election?.phase === "election_voting";
 
   const showPresidentPolicyModal =
@@ -49,14 +52,27 @@ export default function BoardView({
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ display: "grid" }}>
-        {boardImages.map((src) => (
-          <img
-            key={src}
-            src={src}
-            alt="Game board"
-            style={{ width: "100%", maxWidth: 720, borderRadius: 12 }}
-          />
+      <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
+        {boards.map((b) => (
+          <div key={b.key} style={{ position: "relative", width: "100%", maxWidth: 720, zIndex: 0 }}>
+            <img
+              src={b.src}
+              alt="Game board"
+              draggable={false}
+              style={{ width: "100%", borderRadius: 12, display: "block" }}
+            />
+
+            {/* policy overlay layer (place policy cards here later, percent-based positioning works well) */}
+            <div
+              data-policy-layer={b.key}
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 10,
+                pointerEvents: "none",
+              }}
+            />
+          </div>
         ))}
       </div>
 

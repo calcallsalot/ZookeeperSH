@@ -93,73 +93,35 @@ export default function PolicyModal({
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)" }}>{subtitle}</div>
         </div>
 
-        {mode === "president" ? (
-          <div
-            style={{
-              marginTop: 18,
-              height: 300,
-              position: "relative",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <div style={{ position: "relative", width: 340, height: 300 }}>
-              {safePolicies.slice(0, 3).map((p, i) => {
-                const x = 26 * i;
-                const y = 10 * i;
-                const rot = -6 + i * 6;
-                const z = 10 - i;
-
-                return (
-                  <button
-                    key={`${p}-${i}`}
-                    disabled={disabled}
-                    onClick={() => {
-                      setSentIndex(i);
-                      onPick(i);
-                    }}
-                    style={{
-                      position: "absolute",
-                      left: 70 + x,
-                      top: y,
-                      zIndex: z,
-                      transform: `rotate(${rot}deg)`,
-                      border: "none",
-                      background: "transparent",
-                      padding: 0,
-                      cursor: disabled ? "not-allowed" : "pointer",
-                      opacity: disabled ? 0.65 : 1,
-                    }}
-                  >
-                    <PolicyCard policy={p} w={190} h={260} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div style={{ marginTop: 16, display: "flex", gap: 14, justifyContent: "center" }}>
-            {safePolicies.slice(0, 2).map((p, i) => (
-              <button
-                key={`${p}-${i}`}
-                disabled={disabled}
-                onClick={() => {
-                  setSentIndex(i);
-                  onPick(i);
-                }}
-                style={{
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  border: "none",
-                  background: "transparent",
-                  padding: 0,
-                  opacity: disabled ? 0.65 : 1,
-                }}
-              >
-                <PolicyCard policy={p} w={190} h={260} />
-              </button>
-            ))}
-          </div>
-        )}
+        <div
+          style={{
+            marginTop: 16,
+            display: "flex",
+            gap: 14,
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          {(mode === "president" ? safePolicies.slice(0, 3) : safePolicies.slice(0, 2)).map((p, i) => (
+            <button
+              key={`${p}-${i}`}
+              disabled={disabled}
+              onClick={() => {
+                setSentIndex(i);
+                onPick(i);
+              }}
+              style={{
+                cursor: disabled ? "not-allowed" : "pointer",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                opacity: disabled ? 0.65 : 1,
+              }}
+            >
+              <PolicyCard policy={p} w={190} h={260} />
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
