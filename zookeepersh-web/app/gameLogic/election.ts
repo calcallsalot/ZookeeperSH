@@ -18,6 +18,9 @@ export function initGameState(players: PlayerState[]): GameState {
       revealed: false,
       passed: null,
       requiredYes: 4,
+
+      termLockedPresidentSeat: null,
+      termLockedChancellorSeat: null,
     },
 
     policyDeck: createInitialPolicyDeck(),

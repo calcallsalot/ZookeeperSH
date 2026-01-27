@@ -1,5 +1,6 @@
 const { shuffle } = require("./shuffle");
 const { createInitialPolicyDeck } = require("./policyDeck");
+const { buildPrivateRoleState } = require("./roles");
 
 function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emitGameSystem }) {
   const lobby = lobbies.get(lobbyId);
@@ -27,6 +28,10 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
       revealed: false,
       passed: null,
       requiredYes: 4,
+
+      // Term limits (Secret Hitler rule)
+      termLockedPresidentSeat: null,
+      termLockedChancellorSeat: null,
     },
 
     // policy deck + enacted policies
@@ -34,6 +39,9 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
     enactedPolicies: { liberal: 0, fascist: 0 },
     legislative: null,
   };
+
+  // Private, per-seat info (NEVER broadcast directly)
+  gameState.secret = buildPrivateRoleState(seatOrder.length);
 
   // store updated lobby
   const nextLobby = {
@@ -53,9 +61,15 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
   // existing event
   io.to(gameRoom(lobbyId)).emit("game:started", { lobbyId, seatByName, seatOrder });
 
-  // emit initial game state so clients can render election phase immediately
+  // emit initial PUBLIC game state so clients can render immediately.
+  // IMPORTANT: do not include any private role/clue data.
   const publicGameState = {
-    ...gameState,
+    phase: gameState.phase,
+    players: gameState.players,
+    election: gameState.election,
+    enactedPolicies: gameState.enactedPolicies,
+    lastEnactedPolicy: gameState.lastEnactedPolicy,
+    legislative: gameState.legislative,
     policyDeck: {
       drawCount: gameState.policyDeck?.drawPile?.length ?? 0,
       discardCount: gameState.policyDeck?.discardPile?.length ?? 0,

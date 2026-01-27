@@ -3,6 +3,15 @@ const {
   drawPolicies,
   discardPolicies,
 } = require("../../../app/gameLogic/policyDeck");
+const { buildPrivateRoleState } = require("../../../app/gameLogic/roles");
+
+function ensureSecretState(gs) {
+  if (!gs || typeof gs !== "object") return;
+  if (gs.secret && gs.secret.roleBySeat && gs.secret.cluesBySeat) return;
+
+  const seatCount = Array.isArray(gs.players) ? gs.players.length : 0;
+  gs.secret = buildPrivateRoleState(seatCount);
+}
 
 function ensureGameState(lobby) {
   if (lobby.gameState) return;
@@ -27,12 +36,18 @@ function ensureGameState(lobby) {
       revealed: false,
       passed: null,
       requiredYes: 4,
+
+      // Term limits (Secret Hitler rule)
+      termLockedPresidentSeat: null,
+      termLockedChancellorSeat: null,
     },
 
     policyDeck: createInitialPolicyDeck(),
     enactedPolicies: { liberal: 0, fascist: 0 },
     legislative: null,
   };
+
+  ensureSecretState(lobby.gameState);
 }
 
 function getSeatForSocketId(lobby, socketId, online) {
@@ -56,10 +71,10 @@ function publicizePolicyDeck(policyDeck) {
 function sanitizeGameStateForRecipient(gameState, seat, role) {
   if (!gameState) return null;
 
-  const safe = {
-    ...gameState,
-    policyDeck: publicizePolicyDeck(gameState.policyDeck),
-  };
+  ensureSecretState(gameState);
+
+  const phase = gameState.phase;
+  const players = Array.isArray(gameState.players) ? gameState.players : [];
 
   // Safe to expose: only whether a vote was cast (not which vote).
   const rawVotes = gameState?.election?.votes ?? {};
@@ -68,47 +83,94 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     voteCast[Number(k)] = v != null;
   }
 
-  safe.election = {
-    ...gameState.election,
+  const election = {
+    presidentSeat: Number(gameState?.election?.presidentSeat ?? 1),
+    nominatedChancellorSeat: gameState?.election?.nominatedChancellorSeat ?? null,
+    votes: rawVotes,
     voteCast,
+    revealed: Boolean(gameState?.election?.revealed),
+    passed: gameState?.election?.passed ?? null,
+    requiredYes: Number(gameState?.election?.requiredYes ?? 4),
+
+    termLockedPresidentSeat: gameState?.election?.termLockedPresidentSeat ?? null,
+    termLockedChancellorSeat: gameState?.election?.termLockedChancellorSeat ?? null,
+    eligibleChancellorSeats: [],
   };
 
   // Hide other players' votes until reveal.
-  if (gameState.phase === "election_voting") {
+  if (phase === "election_voting") {
     const maskedVotes = {};
     for (const [k, v] of Object.entries(rawVotes)) {
       const s = Number(k);
       maskedVotes[s] = role === "player" && seat != null && s === seat ? v : null;
     }
-    safe.election = {
-      ...safe.election,
-      votes: maskedVotes,
-    };
+    election.votes = maskedVotes;
+  }
+
+  // Public eligibility list for nomination (UI highlight + click gating).
+  if (phase === "election_nomination") {
+    const aliveSeats = players.filter((p) => p.alive).map((p) => p.seat);
+    const tlp = election.termLockedPresidentSeat;
+    const tlc = election.termLockedChancellorSeat;
+    election.eligibleChancellorSeats = aliveSeats.filter((s) => {
+      if (s === election.presidentSeat) return false;
+      if (tlp != null && s === tlp) return false;
+      if (tlc != null && s === tlc) return false;
+      return true;
+    });
   }
 
   // Hide policy hands from non-involved players.
-  if (gameState.phase === "legislative_president") {
-    const isPresident = role === "player" && seat === gameState?.election?.presidentSeat;
-    safe.legislative = isPresident
+  let legislative = null;
+  if (phase === "legislative_president") {
+    const isPresident = role === "player" && seat === election.presidentSeat;
+    legislative = isPresident
       ? {
           presidentPolicies: gameState?.legislative?.presidentPolicies ?? null,
         }
       : null;
-  } else if (gameState.phase === "legislative_chancellor") {
-    const presSeat = gameState?.election?.presidentSeat;
-    const chanSeat = gameState?.election?.nominatedChancellorSeat;
-    const canSee = role === "player" && seat != null && (seat === presSeat || seat === chanSeat);
-    safe.legislative = canSee
+  } else if (phase === "legislative_chancellor") {
+    const chanSeat = election.nominatedChancellorSeat;
+    const canSee = role === "player" && seat != null && (seat === election.presidentSeat || seat === chanSeat);
+    legislative = canSee
       ? {
           chancellorPolicies: gameState?.legislative?.chancellorPolicies ?? null,
         }
       : null;
-  } else {
-    // For other phases, nothing private here yet.
-    safe.legislative = null;
   }
 
-  return safe;
+  // Only show the recipient their own role color (roadmap later: fascists see fascists+Hitler).
+  const visibleRoleColorsBySeat = {};
+  let my = null;
+  if (role === "player" && seat != null) {
+    const r = gameState?.secret?.roleBySeat?.[seat] ?? null;
+    if (r?.color) visibleRoleColorsBySeat[seat] = r.color;
+    const clues = gameState?.secret?.cluesBySeat?.[seat] ?? null;
+    my = {
+      seat,
+      role: r
+        ? {
+            id: r.id,
+            group: r.group,
+            alignment: r.alignment,
+            color: r.color,
+          }
+        : null,
+      clues,
+    };
+  }
+
+  return {
+    phase,
+    players,
+    election,
+    policyDeck: publicizePolicyDeck(gameState.policyDeck),
+    enactedPolicies: gameState.enactedPolicies ?? { liberal: 0, fascist: 0 },
+    lastEnactedPolicy: gameState.lastEnactedPolicy,
+    legislative,
+    visibleRoleColorsBySeat,
+    my,
+  };
 }
 
 function emitGameState({ io, lobbyId, lobby, playerLobby, online }) {
@@ -194,6 +256,12 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     if (!Number.isFinite(target)) return;
     if (target === gs.election.presidentSeat) return;
 
+    // Term limits: last president and last chancellor cannot be nominated chancellor.
+    const tlp = gs?.election?.termLockedPresidentSeat ?? null;
+    const tlc = gs?.election?.termLockedChancellorSeat ?? null;
+    if (tlp != null && target === tlp) return;
+    if (tlc != null && target === tlc) return;
+
     const aliveSeats = gs.players.filter((p) => p.alive).map((p) => p.seat);
     if (!aliveSeats.includes(target)) return;
 
@@ -258,6 +326,10 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
       if (l.gameState.election.passed) {
         if (!l.gameState.policyDeck) l.gameState.policyDeck = createInitialPolicyDeck();
+
+        // Update term limits for the newly elected government.
+        l.gameState.election.termLockedPresidentSeat = l.gameState.election.presidentSeat;
+        l.gameState.election.termLockedChancellorSeat = l.gameState.election.nominatedChancellorSeat;
 
         const drawn = drawPolicies(l.gameState.policyDeck, 3);
         l.gameState.legislative = { presidentPolicies: drawn };

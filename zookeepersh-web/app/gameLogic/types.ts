@@ -20,6 +20,13 @@ export type ElectionState = {
   presidentSeat: number;
   nominatedChancellorSeat: number | null;
 
+  // Term limits (last elected government)
+  termLockedPresidentSeat?: number | null;
+  termLockedChancellorSeat?: number | null;
+
+  // Convenience for UI (public)
+  eligibleChancellorSeats?: number[];
+
   // key = seat number
   votes: Record<number, Vote | null>;
 

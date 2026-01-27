@@ -126,6 +126,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 electionPhase={gameStarted ? gameState?.phase : undefined}
                 electionVotes={gameStarted ? gameState?.election?.votes : undefined}
                 electionVoteCast={gameStarted ? gameState?.election?.voteCast : undefined}
+                eligibleChancellorSeats={gameStarted ? gameState?.election?.eligibleChancellorSeats : undefined}
+                visibleRoleColorsBySeat={gameStarted ? gameState?.visibleRoleColorsBySeat : undefined}
                 nominateEnabled={
                   Boolean(
                     gameStarted &&

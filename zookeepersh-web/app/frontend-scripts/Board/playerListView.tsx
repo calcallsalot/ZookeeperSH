@@ -261,17 +261,15 @@ function ClickableCardWrap({
       {children}
       {enabled ? (
         <div
+          aria-hidden="true"
           style={{
             pointerEvents: "none",
             position: "absolute",
             inset: 0,
             borderRadius: 10,
-            border: "2px solid rgba(255,255,255,0.28)",
-            boxShadow: "0 0 0 3px rgba(0,0,0,0.25)",
-            opacity: 0,
-            transition: "opacity 140ms ease",
+            border: "2px solid rgba(255, 214, 0, 0.88)",
+            boxShadow: "0 0 0 3px rgba(255, 214, 0, 0.16), 0 10px 28px rgba(0,0,0,0.45)",
           }}
-          // simple hover effect without CSS files: use onMouseEnter/Leave? (kept minimal)
         />
       ) : null}
     </div>
@@ -281,16 +279,19 @@ function ClickableCardWrap({
 function AvatarTile({
   seat,
   name,
+  roleColor,
   isChancellor,
   isPresident,
   electionPhase,
   electionVote,
   hasVoted,
   nominateEnabled,
+  eligibleChancellorSeats,
   onNominate,
 }: {
   seat: number;
   name: string;
+  roleColor?: string | null;
   isChancellor?: boolean;
   isPresident?: boolean;
   electionPhase?: string;
@@ -298,6 +299,7 @@ function AvatarTile({
   hasVoted?: boolean;
 
   nominateEnabled?: boolean;
+  eligibleChancellorSeats?: number[];
   onNominate?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
@@ -309,27 +311,51 @@ function AvatarTile({
   const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
   const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
-  const canClick = Boolean(nominateEnabled && onNominate && !isPresident);
-
   return (
     <div style={{ width: 86 }}>
       <div
         style={{
           textAlign: "center",
-          fontSize: 14,
-          color: "white",
           marginBottom: 6,
-          textShadow: "0 2px 0 rgba(0,0,0,0.6)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
         }}
-        title={`${seat}. ${name}`}
       >
-        {name}
+        {roleColor ? (
+          <div
+            aria-hidden="true"
+            style={{
+              height: 4,
+              width: "68%",
+              margin: "0 auto 4px",
+              borderRadius: 999,
+              background: roleColor,
+              boxShadow: "0 2px 10px rgba(0,0,0,0.55)",
+            }}
+          />
+        ) : null}
+        <div
+          style={{
+            fontSize: 14,
+            color: "white",
+            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={`${seat}. ${name}`}
+        >
+          {name}
+        </div>
       </div>
 
-      <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
+      <ClickableCardWrap
+        enabled={Boolean(
+          nominateEnabled &&
+            onNominate &&
+            !isPresident &&
+            (eligibleChancellorSeats?.includes(seat) === true)
+        )}
+        onClick={() => onNominate?.(seat)}
+      >
         <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
@@ -382,6 +408,7 @@ function SitDownTile({ onSit, disabled }: { onSit?: () => void; disabled?: boole
 function CardTile({
   seat,
   name,
+  roleColor,
   isChancellor,
   isPresident,
   electionPhase,
@@ -390,10 +417,12 @@ function CardTile({
   hasVoted,
 
   nominateEnabled,
+  eligibleChancellorSeats,
   onNominate,
 }: {
   seat: number;
   name: string;
+  roleColor?: string | null;
   isChancellor?: boolean;
   isPresident?: boolean;
   electionPhase?: string;
@@ -402,6 +431,7 @@ function CardTile({
   hasVoted?: boolean;
 
   nominateEnabled?: boolean;
+  eligibleChancellorSeats?: number[];
   onNominate?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
@@ -413,28 +443,51 @@ function CardTile({
   const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
   const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
-  // president can’t nominate themselves (typical rule), so disable click on president seat
-  const canClick = Boolean(nominateEnabled && onNominate && !isPresident);
-
   return (
     <div style={{ width: 86 }}>
       <div
         style={{
           textAlign: "center",
-          fontSize: 13,
-          color: "white",
           marginBottom: 6,
-          textShadow: "0 2px 0 rgba(0,0,0,0.6)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
         }}
-        title={`${seat}. ${name}`}
       >
-        {seat}. {name}
+        {roleColor ? (
+          <div
+            aria-hidden="true"
+            style={{
+              height: 4,
+              width: "68%",
+              margin: "0 auto 4px",
+              borderRadius: 999,
+              background: roleColor,
+              boxShadow: "0 2px 10px rgba(0,0,0,0.55)",
+            }}
+          />
+        ) : null}
+        <div
+          style={{
+            fontSize: 13,
+            color: "white",
+            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={`${seat}. ${name}`}
+        >
+          {seat}. {name}
+        </div>
       </div>
 
-      <ClickableCardWrap enabled={canClick} onClick={() => onNominate?.(seat)}>
+      <ClickableCardWrap
+        enabled={Boolean(
+          nominateEnabled &&
+            onNominate &&
+            !isPresident &&
+            (eligibleChancellorSeats?.includes(seat) === true)
+        )}
+        onClick={() => onNominate?.(seat)}
+      >
         <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
@@ -452,6 +505,9 @@ export default function PlayerListView({
   electionVotes,
   electionVoteCast,
 
+  eligibleChancellorSeats,
+  visibleRoleColorsBySeat,
+
   // NEW: nomination
   nominateEnabled,
   onNominateChancellor,
@@ -468,6 +524,9 @@ export default function PlayerListView({
   electionPhase?: string;
   electionVotes?: Record<number, Vote | null>;
   electionVoteCast?: Record<number, boolean>;
+
+  eligibleChancellorSeats?: number[];
+  visibleRoleColorsBySeat?: Record<number, string>;
 
   // If true, tiles become clickable (except president seat) and call onNominateChancellor(seat)
   nominateEnabled?: boolean;
@@ -507,12 +566,14 @@ export default function PlayerListView({
               key={seat}
               seat={seat}
               name={getName(index)}
+              roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
               isChancellor={chancellorSeat === seat}
               isPresident={presidentSeat === seat}
               electionPhase={electionPhase}
               electionVote={electionVotes?.[seat] ?? null}
               hasVoted={electionVoteCast?.[seat] === true}
               nominateEnabled={Boolean(nominateEnabled)}
+              eligibleChancellorSeats={eligibleChancellorSeats}
               onNominate={handleNominate}
             />
           );
@@ -530,12 +591,14 @@ export default function PlayerListView({
             key={seat}
             seat={seat}
             name={getName(index)}
+            roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
             isChancellor={chancellorSeat === seat}
             isPresident={presidentSeat === seat}
             electionPhase={electionPhase}
             electionVote={electionVotes?.[seat] ?? null}
             hasVoted={electionVoteCast?.[seat] === true}
             nominateEnabled={Boolean(nominateEnabled)}
+            eligibleChancellorSeats={eligibleChancellorSeats}
             onNominate={handleNominate}
           />
         );
