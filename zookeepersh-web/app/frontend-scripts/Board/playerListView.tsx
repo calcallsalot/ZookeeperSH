@@ -217,7 +217,7 @@ function RoleBadges({
           src={CHANCELLOR_ROLE}
           alt="Chancellor"
           draggable={false}
-          style={{ height: 20, width: "auto", maxWidth: 70, objectFit: "contain", display: "block" }}
+          style={{ height: 25, width: "auto", maxWidth: 100, objectFit: "contain", display: "block" }}
         />
       ) : null}
     </div>
@@ -335,7 +335,7 @@ function AvatarTile({
         <div
           style={{
             fontSize: 14,
-            color: "white",
+            color: roleColor ??"white",
             textShadow: "0 2px 0 rgba(0,0,0,0.6)",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -467,7 +467,7 @@ function CardTile({
         <div
           style={{
             fontSize: 13,
-            color: "white",
+            color: roleColor ?? "white",
             textShadow: "0 2px 0 rgba(0,0,0,0.6)",
             whiteSpace: "nowrap",
             overflow: "hidden",
