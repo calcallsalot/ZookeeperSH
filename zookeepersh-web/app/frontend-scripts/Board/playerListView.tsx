@@ -320,7 +320,19 @@ function AvatarTile({
         }}
       >
         
-        
+        <div
+          style={{
+            fontSize: 14,
+            color: roleColor ??"white",
+            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={`${seat}. ${name}`}
+        >
+          {name}
+        </div>
       </div>
 
       <ClickableCardWrap
@@ -428,7 +440,19 @@ function CardTile({
         }}
       >
         
-        
+        <div
+          style={{
+            fontSize: 13,
+            color: roleColor ?? "white",
+            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={`${seat}. ${name}`}
+        >
+          {seat}. {name}
+        </div>
       </div>
 
       <ClickableCardWrap
