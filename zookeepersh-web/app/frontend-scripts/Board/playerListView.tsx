@@ -319,32 +319,8 @@ function AvatarTile({
           marginBottom: 6,
         }}
       >
-        {roleColor ? (
-          <div
-            aria-hidden="true"
-            style={{
-              height: 4,
-              width: "68%",
-              margin: "0 auto 4px",
-              borderRadius: 999,
-              background: roleColor,
-              boxShadow: "0 2px 10px rgba(0,0,0,0.55)",
-            }}
-          />
-        ) : null}
-        <div
-          style={{
-            fontSize: 14,
-            color: roleColor ??"white",
-            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-          title={`${seat}. ${name}`}
-        >
-          {name}
-        </div>
+        
+        
       </div>
 
       <ClickableCardWrap
@@ -451,32 +427,8 @@ function CardTile({
           marginBottom: 6,
         }}
       >
-        {roleColor ? (
-          <div
-            aria-hidden="true"
-            style={{
-              height: 4,
-              width: "68%",
-              margin: "0 auto 4px",
-              borderRadius: 999,
-              background: roleColor,
-              boxShadow: "0 2px 10px rgba(0,0,0,0.55)",
-            }}
-          />
-        ) : null}
-        <div
-          style={{
-            fontSize: 13,
-            color: roleColor ?? "white",
-            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-          title={`${seat}. ${name}`}
-        >
-          {seat}. {name}
-        </div>
+        
+        
       </div>
 
       <ClickableCardWrap
