@@ -30,7 +30,8 @@ function ensureSpinKeyframes() {
 
   const style = document.createElement("style");
   style.id = id;
-  style.textContent = "@keyframes zk_spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+  style.textContent =
+    "@keyframes zk_spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
   document.head.appendChild(style);
   SPIN_KEYFRAMES_READY = true;
 }
@@ -188,7 +189,7 @@ function RoleBadges({
 }) {
   if (!isPresident && !isChancellor) return null;
 
-  // Bottom-center overlay (no pill background; preserve icon aspect ratio)
+  // Bottom-center overlay (active roles)
   return (
     <div
       style={{
@@ -218,6 +219,52 @@ function RoleBadges({
           alt="Chancellor"
           draggable={false}
           style={{ height: 25, width: "auto", maxWidth: 100, objectFit: "contain", display: "block" }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TermLockBadges({
+  isPresidentTL,
+  isChancellorTL,
+}: {
+  isPresidentTL?: boolean;
+  isChancellorTL?: boolean;
+}) {
+  if (!isPresidentTL && !isChancellorTL) return null;
+
+  // Top-center overlay (faded term-lock)
+  return (
+    <div
+      style={{
+        pointerEvents: "none",
+        position: "absolute",
+        left: "50%",
+        top: 2,
+        transform: "translateX(-49%)",
+        display: "flex",
+        gap: 6,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: 0.45,
+        filter: "grayscale(1) brightness(1.15) drop-shadow(0 2px 2px rgba(0,0,0,0.65))",
+      }}
+    >
+      {isPresidentTL ? (
+        <img
+          src={PRESIDENT_ROLE}
+          alt="President (term locked)"
+          draggable={false}
+          style={{ height: 22, width: "auto", maxWidth: 100, objectFit: "contain", display: "block" }}
+        />
+      ) : null}
+      {isChancellorTL ? (
+        <img
+          src={CHANCELLOR_ROLE}
+          alt="Chancellor (term locked)"
+          draggable={false}
+          style={{ height: 22, width: "auto", maxWidth: 100, objectFit: "contain", display: "block" }}
         />
       ) : null}
     </div>
@@ -281,7 +328,9 @@ function AvatarTile({
   name,
   roleColor,
   isChancellor,
+  isChancellorTL,
   isPresident,
+  isPresidentTL,
   electionPhase,
   electionVote,
   hasVoted,
@@ -293,7 +342,9 @@ function AvatarTile({
   name: string;
   roleColor?: string | null;
   isChancellor?: boolean;
+  isChancellorTL?: boolean;
   isPresident?: boolean;
+  isPresidentTL?: boolean;
   electionPhase?: string;
   electionVote?: Vote | null;
   hasVoted?: boolean;
@@ -319,11 +370,10 @@ function AvatarTile({
           marginBottom: 6,
         }}
       >
-        
         <div
           style={{
             fontSize: 14,
-            color: roleColor ??"white",
+            color: roleColor ?? "white",
             textShadow: "0 2px 0 rgba(0,0,0,0.6)",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -337,14 +387,12 @@ function AvatarTile({
 
       <ClickableCardWrap
         enabled={Boolean(
-          nominateEnabled &&
-            onNominate &&
-            !isPresident &&
-            (eligibleChancellorSeats?.includes(seat) === true)
+          nominateEnabled && onNominate && !isPresident && eligibleChancellorSeats?.includes(seat) === true
         )}
         onClick={() => onNominate?.(seat)}
       >
         <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
+        <TermLockBadges isPresidentTL={isPresidentTL} isChancellorTL={isChancellorTL} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
     </div>
@@ -398,12 +446,12 @@ function CardTile({
   name,
   roleColor,
   isChancellor,
+  isChancellorTL,
   isPresident,
+  isPresidentTL,
   electionPhase,
   electionVote,
-
   hasVoted,
-
   nominateEnabled,
   eligibleChancellorSeats,
   onNominate,
@@ -412,7 +460,9 @@ function CardTile({
   name: string;
   roleColor?: string | null;
   isChancellor?: boolean;
+  isChancellorTL?: boolean;
   isPresident?: boolean;
+  isPresidentTL?: boolean;
   electionPhase?: string;
   electionVote?: Vote | null;
 
@@ -439,7 +489,6 @@ function CardTile({
           marginBottom: 6,
         }}
       >
-        
         <div
           style={{
             fontSize: 13,
@@ -457,14 +506,12 @@ function CardTile({
 
       <ClickableCardWrap
         enabled={Boolean(
-          nominateEnabled &&
-            onNominate &&
-            !isPresident &&
-            (eligibleChancellorSeats?.includes(seat) === true)
+          nominateEnabled && onNominate && !isPresident && eligibleChancellorSeats?.includes(seat) === true
         )}
         onClick={() => onNominate?.(seat)}
       >
         <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
+        <TermLockBadges isPresidentTL={isPresidentTL} isChancellorTL={isChancellorTL} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
     </div>
@@ -477,6 +524,10 @@ export default function PlayerListView({
   chancellorSeat,
   presidentSeat,
 
+  // term-lock seats
+  chancellorSeatTL,
+  presidentSeatTL,
+
   electionPhase,
   electionVotes,
   electionVoteCast,
@@ -484,7 +535,7 @@ export default function PlayerListView({
   eligibleChancellorSeats,
   visibleRoleColorsBySeat,
 
-  // NEW: nomination
+  // nomination
   nominateEnabled,
   onNominateChancellor,
 
@@ -497,6 +548,9 @@ export default function PlayerListView({
   chancellorSeat?: number;
   presidentSeat?: number;
 
+  chancellorSeatTL?: number;
+  presidentSeatTL?: number;
+
   electionPhase?: string;
   electionVotes?: Record<number, Vote | null>;
   electionVoteCast?: Record<number, boolean>;
@@ -504,7 +558,6 @@ export default function PlayerListView({
   eligibleChancellorSeats?: number[];
   visibleRoleColorsBySeat?: Record<number, string>;
 
-  // If true, tiles become clickable (except president seat) and call onNominateChancellor(seat)
   nominateEnabled?: boolean;
   onNominateChancellor?: (seat: number) => void;
 
@@ -545,6 +598,8 @@ export default function PlayerListView({
               roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
               isChancellor={chancellorSeat === seat}
               isPresident={presidentSeat === seat}
+              isChancellorTL={chancellorSeatTL === seat}
+              isPresidentTL={presidentSeatTL === seat}
               electionPhase={electionPhase}
               electionVote={electionVotes?.[seat] ?? null}
               hasVoted={electionVoteCast?.[seat] === true}
@@ -570,6 +625,8 @@ export default function PlayerListView({
             roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
             isChancellor={chancellorSeat === seat}
             isPresident={presidentSeat === seat}
+            isChancellorTL={chancellorSeatTL === seat}
+            isPresidentTL={presidentSeatTL === seat}
             electionPhase={electionPhase}
             electionVote={electionVotes?.[seat] ?? null}
             hasVoted={electionVoteCast?.[seat] === true}

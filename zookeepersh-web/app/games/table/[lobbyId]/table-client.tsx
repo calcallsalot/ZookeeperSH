@@ -95,7 +95,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
           alignItems: "stretch",
         }}
       >
-        <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+        <div style={{ flex: "1 1 0", minWidth: 0, minHeight: 0 }}>
           <div style={{ height: "100%", color: "white" }}>
             <BoardView
               playerCount={playerCount}
@@ -123,6 +123,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 onSit={showSitButton ? () => sitInLobby(lobbyId) : undefined}
                 presidentSeat={gameStarted ? election?.presidentSeat : undefined}
                 chancellorSeat={gameStarted ? election?.nominatedChancellorSeat ?? undefined : undefined}
+                presidentSeatTL={gameStarted ? gameState?.election?.termLockedPresidentSeat ?? undefined : undefined}
+                chancellorSeatTL={gameStarted ? gameState?.election?.termLockedChancellorSeat ?? undefined : undefined}
                 electionPhase={gameStarted ? gameState?.phase : undefined}
                 electionVotes={gameStarted ? gameState?.election?.votes : undefined}
                 electionVoteCast={gameStarted ? gameState?.election?.voteCast : undefined}
@@ -146,8 +148,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
         <aside
           style={{
-            width: 1200,
-            flexShrink: 0,
+            flex: "1 1 0",
+            minWidth: 0,
             minHeight: 0,
             display: "flex",
             flexDirection: "column",

@@ -118,7 +118,7 @@ export default function PolicyModal({
                 opacity: disabled ? 0.65 : 1,
               }}
             >
-              <PolicyCard policy={p} w={190} h={260} />
+              <PolicyCard policy={p} w={120} h={164} /> {/* the ratio is w 190 and h 260 so w * (260/190)^-1 = h*/} 
             </button>
           ))}
         </div>

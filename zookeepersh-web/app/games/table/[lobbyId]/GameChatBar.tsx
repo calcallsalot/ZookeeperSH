@@ -61,12 +61,12 @@ export default function GameChatBar({
   return (
     <section
       style={{
-        height: "57%",          // IMPORTANT: fill the right panel area
-        minHeight: 0,            // IMPORTANT: allow scrolling children
+        height: "80%",          
+        minHeight: 0,            
         display: "flex",
         flexDirection: "column",
         background: "transparent",
-        borderLeft: "1px solid rgba(255,255,255,0.08)", // like the screenshot divider
+        borderLeft: "1px solid rgba(255,255,255,0.08)", 
       }}
     >
       {/* Messages */}
