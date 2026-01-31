@@ -225,7 +225,7 @@ function nextAlivePresidentSeat(players, currentSeat) {
   return alive[0];
 }
 
-function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, gameRoom }) {
+function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, gameRoom, emitGameSystem }) {
   socket.on("game:state:request", ({ lobbyId } = {}) => {
     if (typeof lobbyId !== "string") return;
     const lobby = lobbies.get(lobbyId);
@@ -422,6 +422,18 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     if (enacted === "liberal") gs.enactedPolicies.liberal += 1;
     if (enacted === "fascist") gs.enactedPolicies.fascist += 1;
     gs.lastEnactedPolicy = enacted;
+
+    if (emitGameSystem) {
+      if (enacted === "fascist") {
+        emitGameSystem(lobbyId, `A fascist policy has been enacted. (${gs.enactedPolicies.fascist}/6)`).catch(
+          () => {}
+        );
+      } else if (enacted === "liberal") {
+        emitGameSystem(lobbyId, `A liberal policy has been enacted. (${gs.enactedPolicies.liberal}/5)`).catch(
+          () => {}
+        );
+      }
+    }
 
     // Advance presidency after policy enactment.
     const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);

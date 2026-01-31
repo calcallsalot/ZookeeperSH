@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLobby } from "../../../frontend-scripts/components/lobby/LobbySocketContext";
 
 function nameColorFromElo(elo?: number | null) {
@@ -8,6 +8,28 @@ function nameColorFromElo(elo?: number | null) {
   if (elo >= 1500 && elo <= 1600) return "#2ecc71";
   if (elo >= 1601 && elo <= 1700) return "#f1c40f";
   return "rgba(255,255,255,0.9)";
+}
+
+function formatSystemText(text: string): ReactNode {
+  const parts = text.split(/(fascist|liberal)/gi); // can't split characters bc it removes colors i have no idea why
+  return parts.map((part, idx) => {
+    const p = part.toLowerCase();
+    if (p === "fascist") {
+      return (
+        <span key={idx} style={{ color: "#ff4d4d", fontWeight: 900 }}>
+          {part}
+        </span>
+      );
+    }
+    if (p === "liberal") {
+      return (
+        <span key={idx} style={{ color: "#4da3ff", fontWeight: 900 }}>
+          {part}
+        </span>
+      );
+    }
+    return <span key={idx}>{part}</span>;
+  });
 }
 
 export default function GameChatBar({
@@ -92,7 +114,7 @@ export default function GameChatBar({
                   padding: "2px 0",
                 }}
               >
-                {m.text}
+                {formatSystemText(String(m.text ?? ""))}
               </div>
             );
           }

@@ -101,6 +101,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               playerCount={playerCount}
               election={gameStarted ? election : undefined}
               legislative={gameStarted ? legislative : undefined}
+              enactedPolicies={gameStarted ? gameState?.enactedPolicies ?? null : null}
               mySeat={mySeat}
               onVote={(vote) => {
                 // server authoritative vote

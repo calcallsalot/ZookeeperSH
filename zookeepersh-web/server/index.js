@@ -235,6 +235,12 @@ io.on("connection", (socket) => {
     removePresenceSocket,
     onlineList,
   });
+  const emitGameSystem = makeEmitGameSystem({
+    io,
+    gameChatCol,
+    gameRoom,
+  });
+
   registerElectionHandlers({
     io,
     socket,
@@ -242,13 +248,7 @@ io.on("connection", (socket) => {
     online,
     playerLobby,
     gameRoom,
-  });
-
-
-  const emitGameSystem = makeEmitGameSystem({
-    io,
-    gameChatCol,
-    gameRoom,
+    emitGameSystem,
   });
 
   registerGameChatHandlers({
