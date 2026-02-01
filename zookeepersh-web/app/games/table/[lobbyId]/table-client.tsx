@@ -13,8 +13,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
   const { data: session, status } = useSession();
   const userName = session?.user?.name ?? null;
 
-  // NOTE: this assumes your context exposes `socket`.
-  // If yours is called differently, rename here.
+  
   const { lobbies, myLobbyId, joinLobby, sitInLobby, myName, canChat, connected, socket } = useLobby();
 
   const lobby = useMemo(() => lobbies.find((l) => l.id === lobbyId), [lobbies, lobbyId]);
