@@ -29,6 +29,9 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
       passed: null,
       requiredYes: 4,
 
+      // Election tracker (chaos after 3 failed elections)
+      failedElections: 0,
+
       // Term limits (Secret Hitler rule)
       termLockedPresidentSeat: null,
       termLockedChancellorSeat: null,
@@ -38,6 +41,9 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
     policyDeck: createInitialPolicyDeck(),
     enactedPolicies: { liberal: 0, fascist: 0 },
     legislative: null,
+
+    power: null,
+    gameOver: null,
   };
 
   // Private, per-seat info (NEVER broadcast directly)

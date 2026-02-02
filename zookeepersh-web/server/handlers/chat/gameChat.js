@@ -54,6 +54,14 @@ function registerGameChatHandlers({
     const seat =
       started && !observer ? lobby?.seatByName?.[finalName] ?? null : null;
 
+    if (started && seat != null) {
+      const alive = lobby?.gameState?.players?.find?.((p) => p.seat === seat)?.alive;
+      if (alive === false) {
+        socket.emit("error:chat", { message: "You are dead." });
+        return;
+      }
+    }
+
     const msg = {
       lobbyId,
       kind: "user",

@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 const DEFAULT_CARDBACK_BG = "/images/card_backs/default_cardback.png";
+const DEAD_CARDBACK_BG = "/images/card_backs/dead.png";
 
 const ELECTION_BALLOT = "/images/election_cards/ballot.png";
 const ELECTION_JA = "/images/election_cards/ja.png";
@@ -274,12 +275,18 @@ function TermLockBadges({
 function ClickableCardWrap({
   enabled,
   onClick,
+  highlightColor,
+  highlightGlow,
   children,
 }: {
   enabled: boolean;
   onClick?: () => void;
+  highlightColor?: string;
+  highlightGlow?: string;
   children: ReactNode;
 }) {
+  const border = highlightColor ?? "rgba(255, 214, 0, 0.88)";
+  const glow = highlightGlow ?? "rgba(255, 214, 0, 0.16)";
   return (
     <div
       role={enabled ? "button" : undefined}
@@ -314,8 +321,8 @@ function ClickableCardWrap({
             position: "absolute",
             inset: 0,
             borderRadius: 10,
-            border: "2px solid rgba(255, 214, 0, 0.88)",
-            boxShadow: "0 0 0 3px rgba(255, 214, 0, 0.16), 0 10px 28px rgba(0,0,0,0.45)",
+            border: `2px solid ${border}`,
+            boxShadow: `0 0 0 3px ${glow}, 0 10px 28px rgba(0,0,0,0.45)`,
           }}
         />
       ) : null}
@@ -327,6 +334,8 @@ function AvatarTile({
   seat,
   name,
   roleColor,
+  revealedRoleName,
+  isDead,
   isChancellor,
   isChancellorTL,
   isPresident,
@@ -337,10 +346,18 @@ function AvatarTile({
   nominateEnabled,
   eligibleChancellorSeats,
   onNominate,
+  investigateEnabled,
+  eligibleInvestigateSeats,
+  onInvestigate,
+  executeEnabled,
+  eligibleExecuteSeats,
+  onExecute,
 }: {
   seat: number;
   name: string;
   roleColor?: string | null;
+  revealedRoleName?: string | null;
+  isDead?: boolean;
   isChancellor?: boolean;
   isChancellorTL?: boolean;
   isPresident?: boolean;
@@ -352,15 +369,54 @@ function AvatarTile({
   nominateEnabled?: boolean;
   eligibleChancellorSeats?: number[];
   onNominate?: (seat: number) => void;
+
+  investigateEnabled?: boolean;
+  eligibleInvestigateSeats?: number[];
+  onInvestigate?: (seat: number) => void;
+
+  executeEnabled?: boolean;
+  eligibleExecuteSeats?: number[];
+  onExecute?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
   const isReveal = electionPhase === "election_reveal";
 
-  const pending = Boolean(isVoting && !hasVoted);
+  const pending = Boolean(!isDead && isVoting && !hasVoted);
 
-  const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
-  const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
+  const frontSrc = isDead ? DEAD_CARDBACK_BG : isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
+  const backSrc = isDead ? undefined : isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
+
+  const action =
+    !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
+      ? ("execute" as const)
+      : !isDead && investigateEnabled && onInvestigate && eligibleInvestigateSeats?.includes(seat) === true
+        ? ("investigate" as const)
+        : !isDead &&
+            nominateEnabled &&
+            onNominate &&
+            !isPresident &&
+            eligibleChancellorSeats?.includes(seat) === true
+          ? ("nominate" as const)
+          : null;
+
+  const highlightColor =
+    action === "execute"
+      ? "rgba(255, 77, 77, 0.92)"
+      : action === "investigate"
+        ? "rgba(77, 163, 255, 0.92)"
+        : action === "nominate"
+          ? "rgba(255, 214, 0, 0.88)"
+          : undefined;
+
+  const highlightGlow =
+    action === "execute"
+      ? "rgba(255, 77, 77, 0.18)"
+      : action === "investigate"
+        ? "rgba(77, 163, 255, 0.18)"
+        : action === "nominate"
+          ? "rgba(255, 214, 0, 0.16)"
+          : undefined;
 
   return (
     <div style={{ width: 86 }}>
@@ -370,28 +426,57 @@ function AvatarTile({
           marginBottom: 6,
         }}
       >
-        <div
-          style={{
-            fontSize: 14,
-            color: roleColor ?? "white",
-            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-          title={`${seat}. ${name}`}
-        >
-          {name}
+        <div style={{ opacity: isDead ? 0.72 : 1 }}>
+          <div
+            style={{
+              fontSize: 14,
+              color: roleColor ?? "white",
+              textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={`${seat}. ${name}`}
+          >
+            {name}
+          </div>
+          {revealedRoleName ? (
+            <div
+              style={{
+                marginTop: 1,
+                fontSize: 11,
+                color: roleColor ?? "rgba(255,255,255,0.85)",
+                textShadow: "0 2px 0 rgba(0,0,0,0.55)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={revealedRoleName}
+            >
+              {revealedRoleName}
+            </div>
+          ) : null}
         </div>
       </div>
 
       <ClickableCardWrap
-        enabled={Boolean(
-          nominateEnabled && onNominate && !isPresident && eligibleChancellorSeats?.includes(seat) === true
-        )}
-        onClick={() => onNominate?.(seat)}
+        enabled={Boolean(action)}
+        highlightColor={highlightColor}
+        highlightGlow={highlightGlow}
+        onClick={() => {
+          if (action === "execute") onExecute?.(seat);
+          else if (action === "investigate") onInvestigate?.(seat);
+          else if (action === "nominate") onNominate?.(seat);
+        }}
       >
-        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
+        <CardBackRect
+          w={86}
+          h={112}
+          src={frontSrc}
+          flipToSrc={backSrc}
+          flip={!isDead && isReveal}
+          pending={pending}
+        />
         <TermLockBadges isPresidentTL={isPresidentTL} isChancellorTL={isChancellorTL} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
@@ -445,6 +530,8 @@ function CardTile({
   seat,
   name,
   roleColor,
+  revealedRoleName,
+  isDead,
   isChancellor,
   isChancellorTL,
   isPresident,
@@ -455,10 +542,18 @@ function CardTile({
   nominateEnabled,
   eligibleChancellorSeats,
   onNominate,
+  investigateEnabled,
+  eligibleInvestigateSeats,
+  onInvestigate,
+  executeEnabled,
+  eligibleExecuteSeats,
+  onExecute,
 }: {
   seat: number;
   name: string;
   roleColor?: string | null;
+  revealedRoleName?: string | null;
+  isDead?: boolean;
   isChancellor?: boolean;
   isChancellorTL?: boolean;
   isPresident?: boolean;
@@ -471,15 +566,54 @@ function CardTile({
   nominateEnabled?: boolean;
   eligibleChancellorSeats?: number[];
   onNominate?: (seat: number) => void;
+
+  investigateEnabled?: boolean;
+  eligibleInvestigateSeats?: number[];
+  onInvestigate?: (seat: number) => void;
+
+  executeEnabled?: boolean;
+  eligibleExecuteSeats?: number[];
+  onExecute?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
   const isReveal = electionPhase === "election_reveal";
 
-  const pending = Boolean(isVoting && !hasVoted);
+  const pending = Boolean(!isDead && isVoting && !hasVoted);
 
-  const frontSrc = isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
-  const backSrc = isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
+  const frontSrc = isDead ? DEAD_CARDBACK_BG : isVoting || isReveal ? ELECTION_BALLOT : DEFAULT_CARDBACK_BG;
+  const backSrc = isDead ? undefined : isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
+
+  const action =
+    !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
+      ? ("execute" as const)
+      : !isDead && investigateEnabled && onInvestigate && eligibleInvestigateSeats?.includes(seat) === true
+        ? ("investigate" as const)
+        : !isDead &&
+            nominateEnabled &&
+            onNominate &&
+            !isPresident &&
+            eligibleChancellorSeats?.includes(seat) === true
+          ? ("nominate" as const)
+          : null;
+
+  const highlightColor =
+    action === "execute"
+      ? "rgba(255, 77, 77, 0.92)"
+      : action === "investigate"
+        ? "rgba(77, 163, 255, 0.92)"
+        : action === "nominate"
+          ? "rgba(255, 214, 0, 0.88)"
+          : undefined;
+
+  const highlightGlow =
+    action === "execute"
+      ? "rgba(255, 77, 77, 0.18)"
+      : action === "investigate"
+        ? "rgba(77, 163, 255, 0.18)"
+        : action === "nominate"
+          ? "rgba(255, 214, 0, 0.16)"
+          : undefined;
 
   return (
     <div style={{ width: 86 }}>
@@ -489,28 +623,57 @@ function CardTile({
           marginBottom: 6,
         }}
       >
-        <div
-          style={{
-            fontSize: 13,
-            color: roleColor ?? "white",
-            textShadow: "0 2px 0 rgba(0,0,0,0.6)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-          title={`${seat}. ${name}`}
-        >
-          {seat}. {name}
+        <div style={{ opacity: isDead ? 0.72 : 1 }}>
+          <div
+            style={{
+              fontSize: 13,
+              color: roleColor ?? "white",
+              textShadow: "0 2px 0 rgba(0,0,0,0.6)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={`${seat}. ${name}`}
+          >
+            {seat}. {name}
+          </div>
+          {revealedRoleName ? (
+            <div
+              style={{
+                marginTop: 1,
+                fontSize: 11,
+                color: roleColor ?? "rgba(255,255,255,0.85)",
+                textShadow: "0 2px 0 rgba(0,0,0,0.55)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={revealedRoleName}
+            >
+              {revealedRoleName}
+            </div>
+          ) : null}
         </div>
       </div>
 
       <ClickableCardWrap
-        enabled={Boolean(
-          nominateEnabled && onNominate && !isPresident && eligibleChancellorSeats?.includes(seat) === true
-        )}
-        onClick={() => onNominate?.(seat)}
+        enabled={Boolean(action)}
+        highlightColor={highlightColor}
+        highlightGlow={highlightGlow}
+        onClick={() => {
+          if (action === "execute") onExecute?.(seat);
+          else if (action === "investigate") onInvestigate?.(seat);
+          else if (action === "nominate") onNominate?.(seat);
+        }}
       >
-        <CardBackRect w={86} h={112} src={frontSrc} flipToSrc={backSrc} flip={isReveal} pending={pending} />
+        <CardBackRect
+          w={86}
+          h={112}
+          src={frontSrc}
+          flipToSrc={backSrc}
+          flip={!isDead && isReveal}
+          pending={pending}
+        />
         <TermLockBadges isPresidentTL={isPresidentTL} isChancellorTL={isChancellorTL} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
@@ -535,9 +698,20 @@ export default function PlayerListView({
   eligibleChancellorSeats,
   visibleRoleColorsBySeat,
 
+  aliveBySeat,
+  revealedRolesBySeat,
+
   // nomination
   nominateEnabled,
   onNominateChancellor,
+
+  // powers
+  investigateEnabled,
+  eligibleInvestigateSeats,
+  onInvestigate,
+  executeEnabled,
+  eligibleExecuteSeats,
+  onExecute,
 
   showSitButton,
   onSit,
@@ -558,8 +732,18 @@ export default function PlayerListView({
   eligibleChancellorSeats?: number[];
   visibleRoleColorsBySeat?: Record<number, string>;
 
+  aliveBySeat?: Record<number, boolean>;
+  revealedRolesBySeat?: Record<number, { id: string; color?: string } | null> | null;
+
   nominateEnabled?: boolean;
   onNominateChancellor?: (seat: number) => void;
+
+  investigateEnabled?: boolean;
+  eligibleInvestigateSeats?: number[];
+  onInvestigate?: (seat: number) => void;
+  executeEnabled?: boolean;
+  eligibleExecuteSeats?: number[];
+  onExecute?: (seat: number) => void;
 
   showSitButton?: boolean;
   onSit?: () => void;
@@ -585,6 +769,14 @@ export default function PlayerListView({
     onNominateChancellor?.(seat);
   };
 
+  const handleInvestigate = (seat: number) => {
+    onInvestigate?.(seat);
+  };
+
+  const handleExecute = (seat: number) => {
+    onExecute?.(seat);
+  };
+
   if (clamped === 7) {
     return (
       <div style={containerStyle}>
@@ -596,6 +788,8 @@ export default function PlayerListView({
               seat={seat}
               name={getName(index)}
               roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
+              revealedRoleName={revealedRolesBySeat?.[seat]?.id ?? null}
+              isDead={aliveBySeat?.[seat] === false}
               isChancellor={chancellorSeat === seat}
               isPresident={presidentSeat === seat}
               isChancellorTL={chancellorSeatTL === seat}
@@ -606,6 +800,12 @@ export default function PlayerListView({
               nominateEnabled={Boolean(nominateEnabled)}
               eligibleChancellorSeats={eligibleChancellorSeats}
               onNominate={handleNominate}
+              investigateEnabled={Boolean(investigateEnabled)}
+              eligibleInvestigateSeats={eligibleInvestigateSeats}
+              onInvestigate={handleInvestigate}
+              executeEnabled={Boolean(executeEnabled)}
+              eligibleExecuteSeats={eligibleExecuteSeats}
+              onExecute={handleExecute}
             />
           );
         })}
@@ -623,6 +823,8 @@ export default function PlayerListView({
             seat={seat}
             name={getName(index)}
             roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
+            revealedRoleName={revealedRolesBySeat?.[seat]?.id ?? null}
+            isDead={aliveBySeat?.[seat] === false}
             isChancellor={chancellorSeat === seat}
             isPresident={presidentSeat === seat}
             isChancellorTL={chancellorSeatTL === seat}
@@ -633,6 +835,12 @@ export default function PlayerListView({
             nominateEnabled={Boolean(nominateEnabled)}
             eligibleChancellorSeats={eligibleChancellorSeats}
             onNominate={handleNominate}
+            investigateEnabled={Boolean(investigateEnabled)}
+            eligibleInvestigateSeats={eligibleInvestigateSeats}
+            onInvestigate={handleInvestigate}
+            executeEnabled={Boolean(executeEnabled)}
+            eligibleExecuteSeats={eligibleExecuteSeats}
+            onExecute={handleExecute}
           />
         );
       })}

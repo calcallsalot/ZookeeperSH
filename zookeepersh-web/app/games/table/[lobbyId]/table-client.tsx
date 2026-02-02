@@ -54,6 +54,21 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
   // gameState is assumed to be attached to lobby by your socket handler
   const gameState: any = gameStarted ? (lobby as any)?.gameState ?? null : null;
 
+  const aliveBySeat = useMemo(() => {
+    const out: Record<number, boolean> = {};
+    const list = Array.isArray(gameState?.players) ? gameState.players : [];
+    for (const p of list) {
+      if (typeof p?.seat === "number") out[p.seat] = p.alive !== false;
+    }
+    return out;
+  }, [gameState?.players]);
+
+  const myAlive = useMemo(() => {
+    if (!gameStarted) return true;
+    if (mySeat == null) return true;
+    return aliveBySeat?.[mySeat] !== false;
+  }, [aliveBySeat, gameStarted, mySeat]);
+
   const election = gameState?.election
     ? {
         phase: gameState.phase,
@@ -102,6 +117,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               legislative={gameStarted ? legislative : undefined}
               enactedPolicies={gameStarted ? gameState?.enactedPolicies ?? null : null}
               mySeat={mySeat}
+              myAlive={myAlive}
               onVote={(vote) => {
                 // server authoritative vote
                 socket?.emit?.("game:castVote", { lobbyId, vote });
@@ -130,6 +146,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 electionVoteCast={gameStarted ? gameState?.election?.voteCast : undefined}
                 eligibleChancellorSeats={gameStarted ? gameState?.election?.eligibleChancellorSeats : undefined}
                 visibleRoleColorsBySeat={gameStarted ? gameState?.visibleRoleColorsBySeat : undefined}
+                aliveBySeat={gameStarted ? aliveBySeat : undefined}
+                revealedRolesBySeat={gameStarted ? gameState?.revealedRolesBySeat ?? null : null}
                 nominateEnabled={
                   Boolean(
                     gameStarted &&
@@ -138,6 +156,30 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                       election?.presidentSeat === mySeat
                   )
                 }
+                investigateEnabled={
+                  Boolean(
+                    gameStarted &&
+                      gameState?.phase === "power_investigate" &&
+                      mySeat != null &&
+                      gameState?.power?.presidentSeat === mySeat
+                  )
+                }
+                eligibleInvestigateSeats={gameStarted ? gameState?.power?.eligibleSeats : undefined}
+                onInvestigate={(seat) => {
+                  socket?.emit?.("game:power:investigate", { lobbyId, targetSeat: seat });
+                }}
+                executeEnabled={
+                  Boolean(
+                    gameStarted &&
+                      gameState?.phase === "power_execute" &&
+                      mySeat != null &&
+                      gameState?.power?.presidentSeat === mySeat
+                  )
+                }
+                eligibleExecuteSeats={gameStarted ? gameState?.power?.eligibleSeats : undefined}
+                onExecute={(seat) => {
+                  socket?.emit?.("game:power:execute", { lobbyId, targetSeat: seat });
+                }}
                 onNominateChancellor={(seat) => {
                   socket?.emit?.("game:nominateChancellor", { lobbyId, chancellorSeat: seat });
                 }}
@@ -156,7 +198,15 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
           }}
         >
           <div style={{ flex: 1, minHeight: 0 }}>
-            <GameChatBar lobbyId={lobbyId} gameStarted={gameStarted} mySeat={mySeat} myElo={myElo} />
+            <GameChatBar
+              lobbyId={lobbyId}
+              gameStarted={gameStarted}
+              mySeat={mySeat}
+              myElo={myElo}
+              myAlive={myAlive}
+              myRole={gameStarted ? gameState?.my?.role ?? null : null}
+              myLastInvestigation={gameStarted ? gameState?.my?.lastInvestigation ?? null : null}
+            />
           </div>
         </aside>
       </div>

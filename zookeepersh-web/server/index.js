@@ -249,6 +249,7 @@ io.on("connection", (socket) => {
     playerLobby,
     gameRoom,
     emitGameSystem,
+    closeLobby,
   });
 
   registerGameChatHandlers({

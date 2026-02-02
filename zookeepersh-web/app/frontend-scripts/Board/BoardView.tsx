@@ -81,6 +81,7 @@ export type BoardViewProps = {
   // NEW (optional)
   election?: ElectionUIState;
   mySeat?: number | null;
+  myAlive?: boolean;
   onVote?: (vote: Vote) => void;
 
   legislative?: LegislativeUIState;
@@ -94,6 +95,7 @@ export default function BoardView({
   playerCount,
   election,
   mySeat = null,
+  myAlive = true,
   onVote,
   legislative,
   onPresidentDiscard,
@@ -107,7 +109,7 @@ export default function BoardView({
     { key: "liberal" as const, src: BOARD_IMAGES.liberal },
     { key: "fascist" as const, src: BOARD_IMAGES.fascist },
   ];
-  const showElectionModal = election?.phase === "election_voting";
+  const showElectionModal = election?.phase === "election_voting" && myAlive !== false;
 
   const showPresidentPolicyModal =
     legislative?.phase === "legislative_president" &&

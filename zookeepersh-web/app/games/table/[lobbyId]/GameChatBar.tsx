@@ -37,11 +37,23 @@ export default function GameChatBar({
   gameStarted,
   mySeat,
   myElo,
+  myAlive,
+  myRole,
+  myLastInvestigation,
 }: {
   lobbyId: string;
   gameStarted: boolean;
   mySeat?: number | null;
   myElo?: number | null;
+  myAlive?: boolean;
+  myRole?: { id: string; color?: string; description?: string | null } | null;
+  myLastInvestigation?:
+    | {
+        ts?: number;
+        targetSeat?: number;
+        role?: { id: string; color?: string; description?: string | null } | null;
+      }
+    | null;
 }) {
   const { connected, canChat, gameChatMessages, joinGameChat, sendGameChat } =
     useLobby() as any;
@@ -60,11 +72,61 @@ export default function GameChatBar({
       .sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
   }, [gameChatMessages, lobbyId]);
 
+  const localSystem = useMemo(() => {
+    /** @type {any[]} */
+    const out = [];
+
+    if (gameStarted && mySeat != null && myRole?.id) {
+      out.push({
+        id: `local:role:${lobbyId}`,
+        lobbyId,
+        kind: "system",
+        ts: 0,
+        content: (
+          <span>
+            The game begins and you receive the role{" "}
+            <span style={{ color: myRole.color ?? "white", fontWeight: 900 }}>{myRole.id}</span> and take seat{" "}
+            <span style={{ fontWeight: 900 }}>{mySeat}</span>
+            {myRole.description ? `\n${myRole.description}` : ""}
+          </span>
+        ),
+      });
+    }
+
+    if (gameStarted && myLastInvestigation?.targetSeat != null && myLastInvestigation?.role?.id) {
+      const ts = typeof myLastInvestigation.ts === "number" ? myLastInvestigation.ts : Date.now();
+      out.push({
+        id: `local:investigate:${lobbyId}:${ts}`,
+        lobbyId,
+        kind: "system",
+        ts,
+        content: (
+          <span>
+            Investigation result: Seat{" "}
+            <span style={{ fontWeight: 900 }}>{myLastInvestigation.targetSeat}</span> is{" "}
+            <span style={{ color: myLastInvestigation.role.color ?? "white", fontWeight: 900 }}>
+              {myLastInvestigation.role.id}
+            </span>
+            {myLastInvestigation.role.description ? `\n${myLastInvestigation.role.description}` : ""}
+          </span>
+        ),
+      });
+    }
+
+    return out;
+  }, [gameStarted, lobbyId, myLastInvestigation, myRole, mySeat]);
+
+  const viewMessages = useMemo(() => {
+    const combined = [...localSystem, ...sorted];
+    combined.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+    return combined;
+  }, [localSystem, sorted]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [sorted.length]);
+  }, [viewMessages.length]);
 
-  const disabled = !connected || !canChat;
+  const disabled = !connected || !canChat || myAlive === false;
 
   const onSend = () => {
     const msg = text.trim();
@@ -102,7 +164,7 @@ export default function GameChatBar({
           lineHeight: 1.25,
         }}
       >
-        {sorted.map((m, idx) => {
+        {viewMessages.map((m, idx) => {
           const key = m.id ?? `${m.ts}-${idx}`;
 
           if (m.kind === "system") {
@@ -112,9 +174,10 @@ export default function GameChatBar({
                 style={{
                   color: "rgba(255,255,255,0.55)",
                   padding: "2px 0",
+                  whiteSpace: "pre-line",
                 }}
               >
-                {formatSystemText(String(m.text ?? ""))}
+                {m.content ?? formatSystemText(String(m.text ?? ""))}
               </div>
             );
           }
@@ -153,7 +216,13 @@ export default function GameChatBar({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={disabled}
-          placeholder={disabled ? "Chat disabled" : "Type a message…"}
+          placeholder={
+            !connected || !canChat
+              ? "Chat disabled"
+              : myAlive === false
+                ? "You are dead"
+                : "Type a message…"
+          }
           style={{
             flex: 1,
             height: 34,

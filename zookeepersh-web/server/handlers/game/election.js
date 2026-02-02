@@ -4,13 +4,17 @@ const {
   discardPolicies,
 } = require("../../../app/gameLogic/policyDeck");
 const { buildPrivateRoleState } = require("../../../app/gameLogic/roles");
+const { getRoleDescription } = require("../../game/roleDescriptions");
 
 function ensureSecretState(gs) {
   if (!gs || typeof gs !== "object") return;
-  if (gs.secret && gs.secret.roleBySeat && gs.secret.cluesBySeat) return;
 
   const seatCount = Array.isArray(gs.players) ? gs.players.length : 0;
-  gs.secret = buildPrivateRoleState(seatCount);
+  if (!gs.secret || !gs.secret.roleBySeat || !gs.secret.cluesBySeat) {
+    gs.secret = buildPrivateRoleState(seatCount);
+  }
+
+  if (!gs.secret.lastInvestigationBySeat) gs.secret.lastInvestigationBySeat = {};
 }
 
 function ensureGameState(lobby) {
@@ -37,6 +41,9 @@ function ensureGameState(lobby) {
       passed: null,
       requiredYes: 4,
 
+      // Election tracker (chaos after 3 failed elections)
+      failedElections: 0,
+
       // Term limits (Secret Hitler rule)
       termLockedPresidentSeat: null,
       termLockedChancellorSeat: null,
@@ -45,6 +52,12 @@ function ensureGameState(lobby) {
     policyDeck: createInitialPolicyDeck(),
     enactedPolicies: { liberal: 0, fascist: 0 },
     legislative: null,
+
+    // power phases (investigate/execute)
+    power: null,
+
+    // game over
+    gameOver: null,
   };
 
   ensureSecretState(lobby.gameState);
@@ -91,6 +104,8 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     revealed: Boolean(gameState?.election?.revealed),
     passed: gameState?.election?.passed ?? null,
     requiredYes: Number(gameState?.election?.requiredYes ?? 4),
+
+    failedElections: Number(gameState?.election?.failedElections ?? 0),
 
     termLockedPresidentSeat: gameState?.election?.termLockedPresidentSeat ?? null,
     termLockedChancellorSeat: gameState?.election?.termLockedChancellorSeat ?? null,
@@ -141,11 +156,33 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
 
   // Only show the recipient their own role color (roadmap later: fascists see fascists+Hitler).
   const visibleRoleColorsBySeat = {};
+
+  const isGameOver = phase === "game_over" || Boolean(gameState?.gameOver);
+  const revealedRolesBySeat = isGameOver ? {} : null;
+
+  if (isGameOver) {
+    for (const p of players) {
+      const r = gameState?.secret?.roleBySeat?.[p.seat] ?? null;
+      if (r?.color) visibleRoleColorsBySeat[p.seat] = r.color;
+      revealedRolesBySeat[p.seat] =
+        r != null
+          ? {
+              id: r.id,
+              group: r.group,
+              alignment: r.alignment,
+              color: r.color,
+              description: getRoleDescription(r.id),
+            }
+          : null;
+    }
+  }
+
   let my = null;
   if (role === "player" && seat != null) {
     const r = gameState?.secret?.roleBySeat?.[seat] ?? null;
-    if (r?.color) visibleRoleColorsBySeat[seat] = r.color;
+    if (!isGameOver && r?.color) visibleRoleColorsBySeat[seat] = r.color;
     const clues = gameState?.secret?.cluesBySeat?.[seat] ?? null;
+    const lastInvestigation = gameState?.secret?.lastInvestigationBySeat?.[seat] ?? null;
     my = {
       seat,
       role: r
@@ -154,9 +191,11 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
             group: r.group,
             alignment: r.alignment,
             color: r.color,
+            description: getRoleDescription(r.id),
           }
         : null,
       clues,
+      lastInvestigation,
     };
   }
 
@@ -169,6 +208,9 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     lastEnactedPolicy: gameState.lastEnactedPolicy,
     legislative,
     visibleRoleColorsBySeat,
+    power: gameState.power ?? null,
+    gameOver: gameState.gameOver ?? null,
+    revealedRolesBySeat,
     my,
   };
 }
@@ -214,6 +256,52 @@ function isPlayerInLobby(socketId, lobbyId, playerLobby) {
   return info.role === "player"; // enforce only players vote
 }
 
+function getAliveSeats(gameState) {
+  return (gameState?.players ?? []).filter((p) => p.alive).map((p) => p.seat);
+}
+
+function isSeatAlive(gameState, seat) {
+  const s = Number(seat);
+  if (!Number.isFinite(s)) return false;
+  const p = (gameState?.players ?? []).find((x) => x.seat === s);
+  return Boolean(p?.alive);
+}
+
+function checkPolicyWin(enactedPolicies) {
+  const lib = Number(enactedPolicies?.liberal ?? 0);
+  const fas = Number(enactedPolicies?.fascist ?? 0);
+  if (lib >= 5) return { winner: "liberal", reason: `Liberals enacted ${lib}/5 policies.` };
+  if (fas >= 6) return { winner: "fascist", reason: `Fascists enacted ${fas}/6 policies.` };
+  return null;
+}
+
+function endGame(gameState, winner, reason) {
+  if (!gameState || typeof gameState !== "object") return false;
+  if (gameState.phase === "game_over" || gameState.gameOver) return false;
+  gameState.phase = "game_over";
+  gameState.power = null;
+  gameState.legislative = null;
+  gameState.gameOver = {
+    winner,
+    reason: String(reason ?? ""),
+    endedAt: Date.now(),
+  };
+  return true;
+}
+
+function scheduleCloseLobby(gameState, closeLobby, lobbyId) {
+  if (!gameState || typeof gameState !== "object") return;
+  if (typeof closeLobby !== "function") return;
+  if (!gameState.gameOver || typeof gameState.gameOver !== "object") return;
+
+  // Close the lobby shortly after game end.
+  if (gameState.gameOver.closeLobbyScheduled) return;
+  const delayMs = 12000;
+  gameState.gameOver.closeLobbyScheduled = true;
+  gameState.gameOver.closeLobbyAt = Date.now() + delayMs;
+  setTimeout(() => closeLobby(lobbyId, "game-over"), delayMs);
+}
+
 function nextAlivePresidentSeat(players, currentSeat) {
   const alive = (players ?? [])
     .filter((p) => p.alive)
@@ -225,7 +313,7 @@ function nextAlivePresidentSeat(players, currentSeat) {
   return alive[0];
 }
 
-function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, gameRoom, emitGameSystem }) {
+function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, gameRoom, emitGameSystem, closeLobby }) {
   socket.on("game:state:request", ({ lobbyId } = {}) => {
     if (typeof lobbyId !== "string") return;
     const lobby = lobbies.get(lobbyId);
@@ -246,8 +334,12 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     ensureGameState(lobby);
     const gs = lobby.gameState;
 
+    if (gs.phase === "game_over") return;
+
     const mySeat = getMySeat(lobby, socket, online);
     if (!mySeat) return;
+
+    if (!isSeatAlive(gs, mySeat)) return;
 
     if (gs.phase !== "election_nomination") return;
     if (mySeat !== gs.election.presidentSeat) return;
@@ -289,10 +381,15 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     ensureGameState(lobby);
     const gs = lobby.gameState;
 
+    if (gs.phase === "game_over") return;
+
     const mySeat = getMySeat(lobby, socket, online);
     if (!mySeat) return;
 
+    if (!isSeatAlive(gs, mySeat)) return;
+
     if (gs.phase !== "election_voting") return;
+    if (!Object.prototype.hasOwnProperty.call(gs.election.votes ?? {}, mySeat)) return;
     if (gs.election.votes?.[mySeat] != null) return;
 
     const v = vote === "ja" ? "ja" : vote === "nein" ? "nein" : null;
@@ -300,7 +397,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
     gs.election.votes[mySeat] = v;
 
-    const aliveSeats = gs.players.filter((p) => p.alive).map((p) => p.seat);
+    const aliveSeats = getAliveSeats(gs);
     const allIn = aliveSeats.every((s) => gs.election.votes[s] != null);
 
     if (!allIn) {
@@ -327,6 +424,8 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
       if (l.gameState.election.passed) {
         if (!l.gameState.policyDeck) l.gameState.policyDeck = createInitialPolicyDeck();
 
+        l.gameState.election.failedElections = 0;
+
         // Update term limits for the newly elected government.
         l.gameState.election.termLockedPresidentSeat = l.gameState.election.presidentSeat;
         l.gameState.election.termLockedChancellorSeat = l.gameState.election.nominatedChancellorSeat;
@@ -340,7 +439,59 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
       }
 
       const nextPres = nextAlivePresidentSeat(l.gameState.players, l.gameState.election.presidentSeat);
-      const aliveSeats2 = l.gameState.players.filter((p) => p.alive).map((p) => p.seat);
+      const aliveSeats2 = getAliveSeats(l.gameState);
+
+      const prevFails = Number(l.gameState.election.failedElections ?? 0);
+      const nextFails = prevFails + 1;
+      l.gameState.election.failedElections = nextFails;
+
+      if (emitGameSystem) {
+        emitGameSystem(lobbyId, `The election fails and the election tracker moves forward. (${nextFails}/3)`).catch(
+          () => {}
+        );
+      }
+
+      // Chaos: topdeck after 3 failed elections.
+      if (nextFails >= 3) {
+        l.gameState.election.failedElections = 0;
+
+        if (!l.gameState.policyDeck) l.gameState.policyDeck = createInitialPolicyDeck();
+        const [top] = drawPolicies(l.gameState.policyDeck, 1);
+        if (top === "liberal" || top === "fascist") {
+          if (!l.gameState.enactedPolicies) l.gameState.enactedPolicies = { liberal: 0, fascist: 0 };
+          if (top === "liberal") l.gameState.enactedPolicies.liberal += 1;
+          if (top === "fascist") l.gameState.enactedPolicies.fascist += 1;
+          l.gameState.lastEnactedPolicy = top;
+
+          if (emitGameSystem) {
+            if (top === "fascist") {
+              emitGameSystem(
+                lobbyId,
+                `A fascist policy has been enacted. (${l.gameState.enactedPolicies.fascist}/6)`
+              ).catch(() => {});
+            } else {
+              emitGameSystem(
+                lobbyId,
+                `A liberal policy has been enacted. (${l.gameState.enactedPolicies.liberal}/5)`
+              ).catch(() => {});
+            }
+          }
+
+          const win = checkPolicyWin(l.gameState.enactedPolicies);
+          const isGameOver = Boolean(win);
+          if (isGameOver) {
+            const didEnd = endGame(l.gameState, win.winner, win.reason);
+            if (didEnd) scheduleCloseLobby(l.gameState, closeLobby, lobbyId);
+            if (emitGameSystem) {
+              emitGameSystem(lobbyId, `Game over. ${win.winner === "liberal" ? "Liberals" : "Fascists"} win!`).catch(
+                () => {}
+              );
+            }
+            emitGameState({ io, lobbyId, lobby: l, playerLobby, online });
+            return;
+          }
+        }
+      }
 
       l.gameState.phase = "election_nomination";
       l.gameState.election.presidentSeat = nextPres;
@@ -368,8 +519,12 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     ensureGameState(lobby);
     const gs = lobby.gameState;
 
+    if (gs.phase === "game_over") return;
+
     const mySeat = getMySeat(lobby, socket, online);
     if (!mySeat) return;
+
+    if (!isSeatAlive(gs, mySeat)) return;
 
     if (gs.phase !== "legislative_president") return;
     if (mySeat !== gs.election.presidentSeat) return;
@@ -401,8 +556,12 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     ensureGameState(lobby);
     const gs = lobby.gameState;
 
+    if (gs.phase === "game_over") return;
+
     const mySeat = getMySeat(lobby, socket, online);
     if (!mySeat) return;
+
+    if (!isSeatAlive(gs, mySeat)) return;
 
     if (gs.phase !== "legislative_chancellor") return;
     if (mySeat !== gs.election.nominatedChancellorSeat) return;
@@ -435,22 +594,193 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
       }
     }
 
+    const win = checkPolicyWin(gs.enactedPolicies);
+    const isGameOver = Boolean(win);
+    if (isGameOver) {
+      const didEnd = endGame(gs, win.winner, win.reason);
+      if (didEnd) scheduleCloseLobby(gs, closeLobby, lobbyId);
+      if (emitGameSystem) {
+        emitGameSystem(lobbyId, `Game over. ${win.winner === "liberal" ? "Liberals" : "Fascists"} win!`).catch(
+          () => {}
+        );
+      }
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    // End the legislative session.
+    gs.legislative = null;
+    gs.election.nominatedChancellorSeat = null;
+
+    const aliveSeats = getAliveSeats(gs);
+    const eligiblePowerTargets = aliveSeats.filter((s) => s !== gs.election.presidentSeat);
+
+    const votes2 = {};
+    for (const s of aliveSeats) votes2[s] = null;
+    gs.election.votes = votes2;
+    gs.election.revealed = false;
+    gs.election.passed = null;
+
+    // Fascist board powers (requested subset)
+    if (enacted === "fascist") {
+      const fas = Number(gs.enactedPolicies.fascist ?? 0);
+      if (fas === 2) {
+        gs.phase = "power_investigate";
+        gs.power = {
+          type: "investigate",
+          presidentSeat: gs.election.presidentSeat,
+          eligibleSeats: eligiblePowerTargets,
+        };
+        emitGameState({ io, lobbyId, lobby, playerLobby, online });
+        return;
+      }
+      if (fas === 4 || fas === 5) {
+        gs.phase = "power_execute";
+        gs.power = {
+          type: "execute",
+          presidentSeat: gs.election.presidentSeat,
+          eligibleSeats: eligiblePowerTargets,
+        };
+        emitGameState({ io, lobbyId, lobby, playerLobby, online });
+        return;
+      }
+    }
+
+    gs.power = null;
+
     // Advance presidency after policy enactment.
     const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
-    const aliveSeats = gs.players.filter((p) => p.alive).map((p) => p.seat);
 
     gs.phase = "election_nomination";
     gs.election.presidentSeat = nextPres;
     gs.election.nominatedChancellorSeat = null;
 
-    const votes2 = {};
-    for (const s of aliveSeats) votes2[s] = null;
-    gs.election.votes = votes2;
+    
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
+  });
+
+  socket.on("game:power:investigate", ({ lobbyId, targetSeat } = {}) => {
+    if (typeof lobbyId !== "string") return;
+    if (!isPlayerInLobby(socket.id, lobbyId, playerLobby)) return;
+
+    const lobby = lobbies.get(lobbyId);
+    if (!lobby) return;
+    if (lobby.status !== "in_game") return;
+
+    ensureGameState(lobby);
+    const gs = lobby.gameState;
+
+    if (gs.phase === "game_over") return;
+    if (gs.phase !== "power_investigate") return;
+    if (gs.power?.type !== "investigate") return;
+
+    const mySeat = getMySeat(lobby, socket, online);
+    if (!mySeat) return;
+    if (!isSeatAlive(gs, mySeat)) return;
+    if (mySeat !== gs.power.presidentSeat) return;
+
+    const target = Number(targetSeat);
+    if (!Number.isFinite(target)) return;
+    if (!Array.isArray(gs.power.eligibleSeats) || !gs.power.eligibleSeats.includes(target)) return;
+    if (!isSeatAlive(gs, target)) return;
+
+    ensureSecretState(gs);
+    const r = gs.secret?.roleBySeat?.[target] ?? null;
+    gs.secret.lastInvestigationBySeat[mySeat] = {
+      ts: Date.now(),
+      targetSeat: target,
+      role:
+        r != null
+          ? {
+              id: r.id,
+              group: r.group,
+              alignment: r.alignment,
+              color: r.color,
+              description: getRoleDescription(r.id),
+            }
+          : null,
+    };
+
+    gs.power = null;
+
+    const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+    const aliveSeats = getAliveSeats(gs);
+
+    gs.phase = "election_nomination";
+    gs.election.presidentSeat = nextPres;
+    gs.election.nominatedChancellorSeat = null;
+
+    const votes = {};
+    for (const s of aliveSeats) votes[s] = null;
+    gs.election.votes = votes;
 
     gs.election.revealed = false;
     gs.election.passed = null;
 
-    gs.legislative = null;
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
+  });
+
+  socket.on("game:power:execute", ({ lobbyId, targetSeat } = {}) => {
+    if (typeof lobbyId !== "string") return;
+    if (!isPlayerInLobby(socket.id, lobbyId, playerLobby)) return;
+
+    const lobby = lobbies.get(lobbyId);
+    if (!lobby) return;
+    if (lobby.status !== "in_game") return;
+
+    ensureGameState(lobby);
+    const gs = lobby.gameState;
+
+    if (gs.phase === "game_over") return;
+    if (gs.phase !== "power_execute") return;
+    if (gs.power?.type !== "execute") return;
+
+    const mySeat = getMySeat(lobby, socket, online);
+    if (!mySeat) return;
+    if (!isSeatAlive(gs, mySeat)) return;
+    if (mySeat !== gs.power.presidentSeat) return;
+
+    const target = Number(targetSeat);
+    if (!Number.isFinite(target)) return;
+    if (!Array.isArray(gs.power.eligibleSeats) || !gs.power.eligibleSeats.includes(target)) return;
+    if (!isSeatAlive(gs, target)) return;
+
+    const p = (gs.players ?? []).find((x) => x.seat === target);
+    if (!p) return;
+    p.alive = false;
+
+    if (emitGameSystem) {
+      emitGameSystem(lobbyId, `Seat ${target} has been executed.`).catch(() => {});
+    }
+
+    ensureSecretState(gs);
+    const killedRole = gs.secret?.roleBySeat?.[target] ?? null;
+    if (killedRole?.id === "Hitler") {
+      gs.power = null;
+      const didEnd = endGame(gs, "liberal", "Hitler was executed.");
+      if (didEnd) scheduleCloseLobby(gs, closeLobby, lobbyId);
+      if (emitGameSystem) {
+        emitGameSystem(lobbyId, "Game over. Liberals win! Hitler has been executed.").catch(() => {});
+      }
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    gs.power = null;
+
+    const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+    const aliveSeats = getAliveSeats(gs);
+
+    gs.phase = "election_nomination";
+    gs.election.presidentSeat = nextPres;
+    gs.election.nominatedChancellorSeat = null;
+
+    const votes = {};
+    for (const s of aliveSeats) votes[s] = null;
+    gs.election.votes = votes;
+
+    gs.election.revealed = false;
+    gs.election.passed = null;
 
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
