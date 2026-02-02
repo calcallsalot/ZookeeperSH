@@ -18,7 +18,7 @@ Dissidents
 
 The Usher, each deck, chooses a player other than themselves and must vote Ja if that player is nominated.
 The Rumorist is known to the Dictator and believes they are a Loyalist even though they are not, and instead learns rumors.
-The Conformist is known to the Dictator and may register as a Fascist even while dead, with their loyalty card being Fascist.
+TODO: The Conformist is known to the Dictator and may register as a Fascist even while dead, with their loyalty card being Fascist.
 The Klutz, upon dying, causes the Dictator to learn this, and Fascists win if a Fascist is elected Chancellor.
 
 Agents
@@ -26,7 +26,7 @@ Agents
 The Insurrectionary, each deck, chooses a player who then learns rumors until a reshuffle occurs.
 The Noble, each deck, chooses a player who will die if two consecutive elections fail before a reshuffle.
 The Grandma, upon dying, remains alive and publicly chooses a player to die, and may register as any Liberal while their loyalty card remains Liberal.
-The Jester, upon dying, causes the game to end in one minute, after which the player chosen by the most Dissidents dies, and two additional Dissidents are added.
+TODO: The Jester, upon dying, causes the game to end in one minute, after which the player chosen by the most Dissidents dies, and two additional Dissidents are added.
 
 Dictator
 
