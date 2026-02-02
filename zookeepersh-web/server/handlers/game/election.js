@@ -82,6 +82,9 @@ function ensureGameState(lobby) {
       passed: null,
       requiredYes: 4,
 
+      // Special election (after 3rd fascist policy)
+      specialElectionReturnSeat: null,
+
       // Election tracker (chaos after 3 failed elections)
       failedElections: 0,
 
@@ -360,6 +363,17 @@ function nextAlivePresidentSeat(players, currentSeat) {
   return alive[0];
 }
 
+function nextPresidentSeatAfterRound(gameState) {
+  const gs = gameState;
+  const ret = gs?.election?.specialElectionReturnSeat;
+  if (ret != null && Number.isFinite(Number(ret))) {
+    gs.election.specialElectionReturnSeat = null;
+    return nextAlivePresidentSeat(gs.players, Number(ret) - 1);
+  }
+
+  return nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+}
+
 function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, gameRoom, emitGameSystem, closeLobby }) {
   socket.on("game:state:request", ({ lobbyId } = {}) => {
     if (typeof lobbyId !== "string") return;
@@ -477,6 +491,25 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         l.gameState.election.termLockedPresidentSeat = l.gameState.election.presidentSeat;
         l.gameState.election.termLockedChancellorSeat = l.gameState.election.nominatedChancellorSeat;
 
+        // Hitler Zone: fascists win if Hitler is elected Chancellor after 3 fascist policies.
+        ensureSecretState(l.gameState);
+        const fasCount = Number(l.gameState.enactedPolicies?.fascist ?? 0);
+        if (fasCount >= 3) {
+          const chanSeat = Number(l.gameState.election.nominatedChancellorSeat);
+          const chanRole = Number.isFinite(chanSeat) ? l.gameState.secret?.roleBySeat?.[chanSeat] ?? null : null;
+          if (chanRole?.id === "Hitler") {
+            const didEnd = endGame(l.gameState, "fascist", "Hitler was elected Chancellor after 3 fascist policies.");
+            if (didEnd) scheduleCloseLobby(l.gameState, closeLobby, lobbyId);
+            if (emitGameSystem) {
+              emitGameSystem(lobbyId, "Game over. Fascists win! Hitler was elected Chancellor in the Hitler Zone.").catch(
+                () => {}
+              );
+            }
+            emitGameState({ io, lobbyId, lobby: l, playerLobby, online });
+            return;
+          }
+        }
+
         const { drawn, reshuffled, shuffleCounts, deck } = drawPoliciesWithReshuffle(l.gameState.policyDeck, 3);
         l.gameState.policyDeck = deck;
         if (reshuffled) {
@@ -495,7 +528,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         return;
       }
 
-      const nextPres = nextAlivePresidentSeat(l.gameState.players, l.gameState.election.presidentSeat);
+      const nextPres = nextPresidentSeatAfterRound(l.gameState);
       const aliveSeats2 = getAliveSeats(l.gameState);
 
       const prevFails = Number(l.gameState.election.failedElections ?? 0);
@@ -702,6 +735,25 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         emitGameState({ io, lobbyId, lobby, playerLobby, online });
         return;
       }
+      if (fas === 3) {
+        gs.phase = "power_special_election";
+        gs.power = {
+          type: "special_election",
+          presidentSeat: gs.election.presidentSeat,
+          eligibleSeats: eligiblePowerTargets,
+        };
+
+        if (gs.election.specialElectionReturnSeat == null) {
+          gs.election.specialElectionReturnSeat = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+        }
+
+        if (emitGameSystem) {
+          emitGameSystem(lobbyId, "Special election: The President chooses the next President.").catch(() => {});
+        }
+
+        emitGameState({ io, lobbyId, lobby, playerLobby, online });
+        return;
+      }
       if (fas === 4 || fas === 5) {
         gs.phase = "power_execute";
         gs.power = {
@@ -717,13 +769,58 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     gs.power = null;
 
     // Advance presidency after policy enactment.
-    const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+    const nextPres = nextPresidentSeatAfterRound(gs);
 
     gs.phase = "election_nomination";
     gs.election.presidentSeat = nextPres;
     gs.election.nominatedChancellorSeat = null;
 
     
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
+  });
+
+  socket.on("game:power:specialElection", ({ lobbyId, targetSeat } = {}) => {
+    if (typeof lobbyId !== "string") return;
+    if (!isPlayerInLobby(socket.id, lobbyId, playerLobby)) return;
+
+    const lobby = lobbies.get(lobbyId);
+    if (!lobby) return;
+    if (lobby.status !== "in_game") return;
+
+    ensureGameState(lobby);
+    const gs = lobby.gameState;
+
+    if (gs.phase === "game_over") return;
+    if (gs.phase !== "power_special_election") return;
+    if (gs.power?.type !== "special_election") return;
+
+    const mySeat = getMySeat(lobby, socket, online);
+    if (!mySeat) return;
+    if (!isSeatAlive(gs, mySeat)) return;
+    if (mySeat !== gs.power.presidentSeat) return;
+
+    const target = Number(targetSeat);
+    if (!Number.isFinite(target)) return;
+    if (!Array.isArray(gs.power.eligibleSeats) || !gs.power.eligibleSeats.includes(target)) return;
+    if (!isSeatAlive(gs, target)) return;
+
+    gs.power = null;
+
+    gs.phase = "election_nomination";
+    gs.election.presidentSeat = target;
+    gs.election.nominatedChancellorSeat = null;
+
+    const aliveSeats = getAliveSeats(gs);
+    const votes = {};
+    for (const s of aliveSeats) votes[s] = null;
+    gs.election.votes = votes;
+    gs.election.revealed = false;
+    gs.election.passed = null;
+
+    if (emitGameSystem) {
+      emitGameSystem(lobbyId, `Special election: Seat ${target} is the next President.`).catch(() => {});
+    }
+
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 
@@ -771,7 +868,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
     gs.power = null;
 
-    const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+    const nextPres = nextPresidentSeatAfterRound(gs);
     const aliveSeats = getAliveSeats(gs);
 
     gs.phase = "election_nomination";
@@ -836,7 +933,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
     gs.power = null;
 
-    const nextPres = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+    const nextPres = nextPresidentSeatAfterRound(gs);
     const aliveSeats = getAliveSeats(gs);
 
     gs.phase = "election_nomination";

@@ -352,6 +352,10 @@ function AvatarTile({
   executeEnabled,
   eligibleExecuteSeats,
   onExecute,
+
+  specialElectionEnabled,
+  eligibleSpecialElectionSeats,
+  onSpecialElection,
 }: {
   seat: number;
   name: string;
@@ -377,6 +381,10 @@ function AvatarTile({
   executeEnabled?: boolean;
   eligibleExecuteSeats?: number[];
   onExecute?: (seat: number) => void;
+
+  specialElectionEnabled?: boolean;
+  eligibleSpecialElectionSeats?: number[];
+  onSpecialElection?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
@@ -393,6 +401,11 @@ function AvatarTile({
       : !isDead && investigateEnabled && onInvestigate && eligibleInvestigateSeats?.includes(seat) === true
         ? ("investigate" as const)
         : !isDead &&
+            specialElectionEnabled &&
+            onSpecialElection &&
+            eligibleSpecialElectionSeats?.includes(seat) === true
+          ? ("special_election" as const)
+        : !isDead &&
             nominateEnabled &&
             onNominate &&
             !isPresident &&
@@ -405,6 +418,8 @@ function AvatarTile({
       ? "rgba(255, 77, 77, 0.92)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.92)"
+        : action === "special_election"
+          ? "rgba(46, 204, 113, 0.92)"
         : action === "nominate"
           ? "rgba(255, 214, 0, 0.88)"
           : undefined;
@@ -414,6 +429,8 @@ function AvatarTile({
       ? "rgba(255, 77, 77, 0.18)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.18)"
+        : action === "special_election"
+          ? "rgba(46, 204, 113, 0.18)"
         : action === "nominate"
           ? "rgba(255, 214, 0, 0.16)"
           : undefined;
@@ -466,6 +483,7 @@ function AvatarTile({
         onClick={() => {
           if (action === "execute") onExecute?.(seat);
           else if (action === "investigate") onInvestigate?.(seat);
+          else if (action === "special_election") onSpecialElection?.(seat);
           else if (action === "nominate") onNominate?.(seat);
         }}
       >
@@ -548,6 +566,10 @@ function CardTile({
   executeEnabled,
   eligibleExecuteSeats,
   onExecute,
+
+  specialElectionEnabled,
+  eligibleSpecialElectionSeats,
+  onSpecialElection,
 }: {
   seat: number;
   name: string;
@@ -574,6 +596,10 @@ function CardTile({
   executeEnabled?: boolean;
   eligibleExecuteSeats?: number[];
   onExecute?: (seat: number) => void;
+
+  specialElectionEnabled?: boolean;
+  eligibleSpecialElectionSeats?: number[];
+  onSpecialElection?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
@@ -590,6 +616,11 @@ function CardTile({
       : !isDead && investigateEnabled && onInvestigate && eligibleInvestigateSeats?.includes(seat) === true
         ? ("investigate" as const)
         : !isDead &&
+            specialElectionEnabled &&
+            onSpecialElection &&
+            eligibleSpecialElectionSeats?.includes(seat) === true
+          ? ("special_election" as const)
+        : !isDead &&
             nominateEnabled &&
             onNominate &&
             !isPresident &&
@@ -602,6 +633,8 @@ function CardTile({
       ? "rgba(255, 77, 77, 0.92)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.92)"
+        : action === "special_election"
+          ? "rgba(255, 214, 0, 0.88)"
         : action === "nominate"
           ? "rgba(255, 214, 0, 0.88)"
           : undefined;
@@ -611,6 +644,8 @@ function CardTile({
       ? "rgba(255, 77, 77, 0.18)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.18)"
+        : action === "special_election"
+          ? "rgba(255, 214, 0, 0.16)"
         : action === "nominate"
           ? "rgba(255, 214, 0, 0.16)"
           : undefined;
@@ -663,6 +698,7 @@ function CardTile({
         onClick={() => {
           if (action === "execute") onExecute?.(seat);
           else if (action === "investigate") onInvestigate?.(seat);
+          else if (action === "special_election") onSpecialElection?.(seat);
           else if (action === "nominate") onNominate?.(seat);
         }}
       >
@@ -713,6 +749,10 @@ export default function PlayerListView({
   eligibleExecuteSeats,
   onExecute,
 
+  specialElectionEnabled,
+  eligibleSpecialElectionSeats,
+  onSpecialElection,
+
   showSitButton,
   onSit,
   sitDisabled,
@@ -744,6 +784,10 @@ export default function PlayerListView({
   executeEnabled?: boolean;
   eligibleExecuteSeats?: number[];
   onExecute?: (seat: number) => void;
+
+  specialElectionEnabled?: boolean;
+  eligibleSpecialElectionSeats?: number[];
+  onSpecialElection?: (seat: number) => void;
 
   showSitButton?: boolean;
   onSit?: () => void;
@@ -777,6 +821,10 @@ export default function PlayerListView({
     onExecute?.(seat);
   };
 
+  const handleSpecialElection = (seat: number) => {
+    onSpecialElection?.(seat);
+  };
+
   if (clamped === 7) {
     return (
       <div style={containerStyle}>
@@ -806,6 +854,9 @@ export default function PlayerListView({
               executeEnabled={Boolean(executeEnabled)}
               eligibleExecuteSeats={eligibleExecuteSeats}
               onExecute={handleExecute}
+              specialElectionEnabled={Boolean(specialElectionEnabled)}
+              eligibleSpecialElectionSeats={eligibleSpecialElectionSeats}
+              onSpecialElection={handleSpecialElection}
             />
           );
         })}
@@ -841,6 +892,9 @@ export default function PlayerListView({
             executeEnabled={Boolean(executeEnabled)}
             eligibleExecuteSeats={eligibleExecuteSeats}
             onExecute={handleExecute}
+            specialElectionEnabled={Boolean(specialElectionEnabled)}
+            eligibleSpecialElectionSeats={eligibleSpecialElectionSeats}
+            onSpecialElection={handleSpecialElection}
           />
         );
       })}

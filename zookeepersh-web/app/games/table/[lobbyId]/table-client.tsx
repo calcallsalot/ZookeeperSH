@@ -180,6 +180,18 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 onExecute={(seat) => {
                   socket?.emit?.("game:power:execute", { lobbyId, targetSeat: seat });
                 }}
+                specialElectionEnabled={
+                  Boolean(
+                    gameStarted &&
+                      gameState?.phase === "power_special_election" &&
+                      mySeat != null &&
+                      gameState?.power?.presidentSeat === mySeat
+                  )
+                }
+                eligibleSpecialElectionSeats={gameStarted ? gameState?.power?.eligibleSeats : undefined}
+                onSpecialElection={(seat) => {
+                  socket?.emit?.("game:power:specialElection", { lobbyId, targetSeat: seat });
+                }}
                 onNominateChancellor={(seat) => {
                   socket?.emit?.("game:nominateChancellor", { lobbyId, chancellorSeat: seat });
                 }}

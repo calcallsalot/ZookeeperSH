@@ -29,6 +29,9 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
       passed: null,
       requiredYes: 4,
 
+      // Special election (after 3rd fascist policy)
+      specialElectionReturnSeat: null,
+
       // Election tracker (chaos after 3 failed elections)
       failedElections: 0,
 
