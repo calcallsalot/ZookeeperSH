@@ -296,7 +296,7 @@ function scheduleCloseLobby(gameState, closeLobby, lobbyId) {
 
   // Close the lobby shortly after game end.
   if (gameState.gameOver.closeLobbyScheduled) return;
-  const delayMs = 12000;
+  const delayMs = 60 * 1000; // measured in ms so yeah at least one minute
   gameState.gameOver.closeLobbyScheduled = true;
   gameState.gameOver.closeLobbyAt = Date.now() + delayMs;
   setTimeout(() => closeLobby(lobbyId, "game-over"), delayMs);
