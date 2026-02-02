@@ -11,9 +11,37 @@ function nameColorFromElo(elo?: number | null) {
 }
 
 function formatSystemText(text: string): ReactNode {
-  const parts = text.split(/(fascist|liberal)/gi); // can't split characters bc it removes colors i have no idea why
+  const parts = text.split(/(fascist policy|liberal policy|\d+\s+liberal|\d+\s+fascist|fascist|liberal)/gi);
   return parts.map((part, idx) => {
     const p = part.toLowerCase();
+    if (p === "fascist policy") {
+      return (
+        <span key={idx} style={{ color: "#ff4d4d", fontWeight: 900 }}>
+          {part}
+        </span>
+      );
+    }
+    if (p === "liberal policy") {
+      return (
+        <span key={idx} style={{ color: "#4da3ff", fontWeight: 900 }}>
+          {part}
+        </span>
+      );
+    }
+    if (/^\d+\s+liberal$/i.test(part)) {
+      return (
+        <span key={idx} style={{ color: "#4da3ff", fontWeight: 900 }}>
+          {part}
+        </span>
+      );
+    }
+    if (/^\d+\s+fascist$/i.test(part)) {
+      return (
+        <span key={idx} style={{ color: "#ff4d4d", fontWeight: 900 }}>
+          {part}
+        </span>
+      );
+    }
     if (p === "fascist") {
       return (
         <span key={idx} style={{ color: "#ff4d4d", fontWeight: 900 }}>

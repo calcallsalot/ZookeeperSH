@@ -3,6 +3,16 @@ const { shuffle } = require("./shuffle");
 /** @typedef {"liberal" | "fascist"} PolicyType */
 /** @typedef {{ drawPile: PolicyType[], discardPile: PolicyType[] }} PolicyDeck */
 
+function countPolicies(cards) {
+  let liberal = 0;
+  let fascist = 0;
+  for (const c of cards ?? []) {
+    if (c === "liberal") liberal += 1;
+    else if (c === "fascist") fascist += 1;
+  }
+  return { liberal, fascist };
+}
+
 function createInitialPolicyDeck() {
   /** @type {PolicyType[]} */
   const drawPile = [];
@@ -25,28 +35,31 @@ function normalizeDeck(deck) {
 }
 
 function ensureCanDraw(deck, n) {
-  normalizeDeck(deck);
-
-  if (deck.drawPile.length >= n) return deck;
+  if (deck.drawPile.length >= n) return { reshuffled: false, shuffleCounts: null };
 
   // Secret Hitler reshuffle rule: if fewer than n cards remain, shuffle discards into a new draw pile.
   const combined = [...deck.drawPile, ...deck.discardPile];
   deck.drawPile = shuffle(combined);
   deck.discardPile = [];
-  return deck;
+  return { reshuffled: true, shuffleCounts: countPolicies(deck.drawPile) };
 }
 
-function drawPolicies(deck, n) {
-  normalizeDeck(deck);
-  ensureCanDraw(deck, n);
+function drawPoliciesWithReshuffle(deck, n) {
+  const d = normalizeDeck(deck);
+  const { reshuffled, shuffleCounts } = ensureCanDraw(d, n);
 
   const drawn = [];
   for (let i = 0; i < n; i++) {
-    const card = deck.drawPile.pop();
+    const card = d.drawPile.pop();
     if (!card) break;
     drawn.push(card);
   }
-  return drawn;
+
+  return { drawn, reshuffled, shuffleCounts, deck: d };
+}
+
+function drawPolicies(deck, n) {
+  return drawPoliciesWithReshuffle(deck, n).drawn;
 }
 
 function discardPolicies(deck, cards) {
@@ -59,6 +72,7 @@ function discardPolicies(deck, cards) {
 
 module.exports = {
   createInitialPolicyDeck,
+  drawPoliciesWithReshuffle,
   drawPolicies,
   discardPolicies,
 };

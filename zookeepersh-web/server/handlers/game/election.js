@@ -1,6 +1,6 @@
 const {
   createInitialPolicyDeck,
-  drawPolicies,
+  drawPoliciesWithReshuffle,
   discardPolicies,
 } = require("../../../app/gameLogic/policyDeck");
 const { buildPrivateRoleState } = require("../../../app/gameLogic/roles");
@@ -15,6 +15,47 @@ function ensureSecretState(gs) {
   }
 
   if (!gs.secret.lastInvestigationBySeat) gs.secret.lastInvestigationBySeat = {};
+}
+
+function ensurePolicyDeckMeta(gs) {
+  if (!gs || typeof gs !== "object") return;
+  if (!gs.policyDeckMeta || typeof gs.policyDeckMeta !== "object") {
+    gs.policyDeckMeta = {
+      deckNumber: 1,
+      reshuffleCount: 0,
+      lastShuffleAt: Date.now(),
+    };
+    return;
+  }
+
+  if (!Number.isFinite(Number(gs.policyDeckMeta.deckNumber))) gs.policyDeckMeta.deckNumber = 1;
+  if (!Number.isFinite(Number(gs.policyDeckMeta.reshuffleCount))) gs.policyDeckMeta.reshuffleCount = 0;
+  if (!Number.isFinite(Number(gs.policyDeckMeta.lastShuffleAt))) gs.policyDeckMeta.lastShuffleAt = Date.now();
+}
+
+function maybeEmitDeckShuffle({ gs, lobbyId, emitGameSystem, shuffleCounts, isReshuffle }) {
+  if (!shuffleCounts || typeof shuffleCounts !== "object") return;
+  if (typeof shuffleCounts.liberal !== "number" || typeof shuffleCounts.fascist !== "number") return;
+
+  ensurePolicyDeckMeta(gs);
+
+  if (isReshuffle) {
+    gs.policyDeckMeta.deckNumber = Number(gs.policyDeckMeta.deckNumber ?? 1) + 1;
+    gs.policyDeckMeta.reshuffleCount = Number(gs.policyDeckMeta.reshuffleCount ?? 0) + 1;
+  }
+
+  gs.policyDeckMeta.lastShuffleAt = Date.now();
+  gs.policyDeckMeta.lastShuffleCounts = {
+    liberal: shuffleCounts.liberal,
+    fascist: shuffleCounts.fascist,
+  };
+
+  if (emitGameSystem) {
+    emitGameSystem(
+      lobbyId,
+      `Deck Shuffled: ${shuffleCounts.liberal} Liberal and ${shuffleCounts.fascist} fascist policies.`
+    ).catch(() => {});
+  }
 }
 
 function ensureGameState(lobby) {
@@ -52,6 +93,12 @@ function ensureGameState(lobby) {
     policyDeck: createInitialPolicyDeck(),
     enactedPolicies: { liberal: 0, fascist: 0 },
     legislative: null,
+
+    policyDeckMeta: {
+      deckNumber: 1,
+      reshuffleCount: 0,
+      lastShuffleAt: Date.now(),
+    },
 
     // power phases (investigate/execute)
     power: null,
@@ -430,7 +477,17 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         l.gameState.election.termLockedPresidentSeat = l.gameState.election.presidentSeat;
         l.gameState.election.termLockedChancellorSeat = l.gameState.election.nominatedChancellorSeat;
 
-        const drawn = drawPolicies(l.gameState.policyDeck, 3);
+        const { drawn, reshuffled, shuffleCounts, deck } = drawPoliciesWithReshuffle(l.gameState.policyDeck, 3);
+        l.gameState.policyDeck = deck;
+        if (reshuffled) {
+          maybeEmitDeckShuffle({
+            gs: l.gameState,
+            lobbyId,
+            emitGameSystem,
+            shuffleCounts,
+            isReshuffle: true,
+          });
+        }
         l.gameState.legislative = { presidentPolicies: drawn };
         l.gameState.phase = "legislative_president";
 
@@ -456,7 +513,18 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         l.gameState.election.failedElections = 0;
 
         if (!l.gameState.policyDeck) l.gameState.policyDeck = createInitialPolicyDeck();
-        const [top] = drawPolicies(l.gameState.policyDeck, 1);
+        const topDraw = drawPoliciesWithReshuffle(l.gameState.policyDeck, 1);
+        l.gameState.policyDeck = topDraw.deck;
+        if (topDraw.reshuffled) {
+          maybeEmitDeckShuffle({
+            gs: l.gameState,
+            lobbyId,
+            emitGameSystem,
+            shuffleCounts: topDraw.shuffleCounts,
+            isReshuffle: true,
+          });
+        }
+        const [top] = topDraw.drawn;
         if (top === "liberal" || top === "fascist") {
           if (!l.gameState.enactedPolicies) l.gameState.enactedPolicies = { liberal: 0, fascist: 0 };
           if (top === "liberal") l.gameState.enactedPolicies.liberal += 1;

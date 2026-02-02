@@ -42,6 +42,12 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
     enactedPolicies: { liberal: 0, fascist: 0 },
     legislative: null,
 
+    policyDeckMeta: {
+      deckNumber: 1,
+      reshuffleCount: 0,
+      lastShuffleAt: Date.now(),
+    },
+
     power: null,
     gameOver: null,
   };
@@ -83,7 +89,13 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
   };
   io.to(gameRoom(lobbyId)).emit("game:state", { lobbyId, gameState: publicGameState });
 
-  if (emitGameSystem) emitGameSystem(lobbyId, "The game begins").catch(() => {});
+  if (emitGameSystem) {
+    const drawPile = gameState.policyDeck?.drawPile ?? [];
+    const liberal = drawPile.filter((c) => c === "liberal").length;
+    const fascist = drawPile.filter((c) => c === "fascist").length;
+    emitGameSystem(lobbyId, `Deck Shuffled: ${liberal} Liberal and ${fascist} fascist policies.`).catch(() => {});
+    emitGameSystem(lobbyId, "The game begins").catch(() => {});
+  }
 }
 
 module.exports = { startGameIfReady };
