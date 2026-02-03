@@ -6,6 +6,66 @@ const {
 const { buildPrivateRoleState } = require("../../../app/gameLogic/roles");
 const { getRoleDescription } = require("../../game/roleDescriptions");
 
+function getInvestigationTeamFromRole(role) {
+  if (!role || typeof role !== "object") return null;
+
+  // Special register rules
+  if (role.id === "Grandma") return "liberal";
+
+  const g = role.group;
+  if (g === "loyalist" || g === "dissident") return "liberal";
+  if (g === "agent" || g === "dictator") return "fascist";
+
+  const a = role.alignment;
+  if (a === "liberal" || a === "fascist") return a;
+
+  return null;
+}
+
+function publicizeInvestigation(lastInvestigation) {
+  if (!lastInvestigation || typeof lastInvestigation !== "object") return null;
+
+  const ts = typeof lastInvestigation.ts === "number" ? lastInvestigation.ts : undefined;
+  const targetSeat =
+    typeof lastInvestigation.targetSeat === "number" ? lastInvestigation.targetSeat : undefined;
+
+  // Preferred format (extensible for future investigative powers)
+  if (Object.prototype.hasOwnProperty.call(lastInvestigation, "result")) {
+    const r = lastInvestigation.result;
+    if (r == null) {
+      return { ts, targetSeat, result: null };
+    }
+
+    if (typeof r === "object") {
+      return {
+        ts,
+        targetSeat,
+        result: r,
+      };
+    }
+
+    return {
+      ts,
+      targetSeat,
+      result: { kind: "text", text: String(r) },
+    };
+  }
+
+  // Back-compat: older games stored the full investigated role.
+  const team = getInvestigationTeamFromRole(lastInvestigation.role);
+  return team
+    ? {
+        ts,
+        targetSeat,
+        result: { kind: "team", team },
+      }
+    : {
+        ts,
+        targetSeat,
+        result: null,
+      };
+}
+
 function ensureSecretState(gs) {
   if (!gs || typeof gs !== "object") return;
 
@@ -232,7 +292,7 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     const r = gameState?.secret?.roleBySeat?.[seat] ?? null;
     if (!isGameOver && r?.color) visibleRoleColorsBySeat[seat] = r.color;
     const clues = gameState?.secret?.cluesBySeat?.[seat] ?? null;
-    const lastInvestigation = gameState?.secret?.lastInvestigationBySeat?.[seat] ?? null;
+    const lastInvestigation = publicizeInvestigation(gameState?.secret?.lastInvestigationBySeat?.[seat] ?? null);
     my = {
       seat,
       role: r
@@ -851,19 +911,11 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
     ensureSecretState(gs);
     const r = gs.secret?.roleBySeat?.[target] ?? null;
+    const team = getInvestigationTeamFromRole(r);
     gs.secret.lastInvestigationBySeat[mySeat] = {
       ts: Date.now(),
       targetSeat: target,
-      role:
-        r != null
-          ? {
-              id: r.id,
-              group: r.group,
-              alignment: r.alignment,
-              color: r.color,
-              description: getRoleDescription(r.id),
-            }
-          : null,
+      result: team ? { kind: "team", team } : null,
     };
 
     gs.power = null;

@@ -17,8 +17,8 @@ const ROLE_GROUPS = {
     "Pacifist",
     "Governor",
   ],
-  dissident: ["Usher", "Rumorist", "Conformist", "Klutz"],
-  agent: ["Insurrectionary", "Noble", "Grandma", "Jester"],
+  dissident: ["Usher", "Rumorist", "Klutz"], // will add conformist later [.., "Conformist"],
+  agent: ["Insurrectionary", "Noble", "Grandma"], // will add jester later [.., "Jester"],
   dictator: ["Hitler"],
 };
 

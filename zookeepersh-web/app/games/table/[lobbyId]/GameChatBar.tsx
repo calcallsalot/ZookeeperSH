@@ -79,7 +79,16 @@ export default function GameChatBar({
     | {
         ts?: number;
         targetSeat?: number;
-        role?: { id: string; color?: string; description?: string | null } | null;
+        result?: { kind?: string; team?: "liberal" | "fascist" } | null;
+
+        // Legacy format (older servers stored the full investigated role)
+        role?: {
+          id: string;
+          group?: string;
+          alignment?: string;
+          color?: string;
+          description?: string | null;
+        } | null;
       }
     | null;
 }) {
@@ -104,6 +113,21 @@ export default function GameChatBar({
     /** @type {any[]} */
     const out = [];
 
+     const getTeamFromInvestigation = (inv: any): "liberal" | "fascist" | null => {
+       const kind = inv?.result?.kind;
+       if (kind === "team" && (inv?.result?.team === "liberal" || inv?.result?.team === "fascist")) {
+         return inv.result.team;
+       }
+
+       const r = inv?.role;
+       if (r?.id === "Grandma") return "liberal";
+       if (r?.group === "loyalist" || r?.group === "dissident") return "liberal";
+       if (r?.group === "agent" || r?.group === "dictator") return "fascist";
+       if (r?.alignment === "liberal" || r?.alignment === "fascist") return r.alignment;
+
+       return null;
+     };
+
     if (gameStarted && mySeat != null && myRole?.id) {
       out.push({
         id: `local:role:${lobbyId}`,
@@ -121,8 +145,10 @@ export default function GameChatBar({
       });
     }
 
-    if (gameStarted && myLastInvestigation?.targetSeat != null && myLastInvestigation?.role?.id) {
+    const invTeam = getTeamFromInvestigation(myLastInvestigation);
+    if (gameStarted && myLastInvestigation?.targetSeat != null && invTeam) {
       const ts = typeof myLastInvestigation.ts === "number" ? myLastInvestigation.ts : Date.now();
+      const teamColor = invTeam === "liberal" ? "#4da3ff" : "#ff4d4d";
       out.push({
         id: `local:investigate:${lobbyId}:${ts}`,
         lobbyId,
@@ -132,10 +158,9 @@ export default function GameChatBar({
           <span>
             Investigation result: Seat{" "}
             <span style={{ fontWeight: 900 }}>{myLastInvestigation.targetSeat}</span> is{" "}
-            <span style={{ color: myLastInvestigation.role.color ?? "white", fontWeight: 900 }}>
-              {myLastInvestigation.role.id}
+            <span style={{ color: teamColor, fontWeight: 900 }}>
+              {invTeam}
             </span>
-            {myLastInvestigation.role.description ? `\n${myLastInvestigation.role.description}` : ""}
           </span>
         ),
       });
