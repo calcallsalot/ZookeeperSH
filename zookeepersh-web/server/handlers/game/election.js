@@ -22,6 +22,12 @@ function getInvestigationTeamFromRole(role) {
   return null;
 }
 
+function teamColor(team) {
+  if (team === "liberal") return "#4da3ff";
+  if (team === "fascist") return "#ff4d4d";
+  return null;
+}
+
 function publicizeInvestigation(lastInvestigation) {
   if (!lastInvestigation || typeof lastInvestigation !== "object") return null;
 
@@ -75,6 +81,9 @@ function ensureSecretState(gs) {
   }
 
   if (!gs.secret.lastInvestigationBySeat) gs.secret.lastInvestigationBySeat = {};
+
+  // Per-investigator remembered info (used for UI coloring, etc.)
+  if (!gs.secret.knownTeamsBySeat) gs.secret.knownTeamsBySeat = {};
 }
 
 function ensurePolicyDeckMeta(gs) {
@@ -291,6 +300,41 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
   if (role === "player" && seat != null) {
     const r = gameState?.secret?.roleBySeat?.[seat] ?? null;
     if (!isGameOver && r?.color) visibleRoleColorsBySeat[seat] = r.color;
+
+    if (!isGameOver) {
+      // Agents can see co-fascists and the Dictator in the player list.
+      // Dictator/Hitler does NOT see the fascist team without investigating.
+      if (r?.group === "agent") {
+        for (const p of players) {
+          const s = Number(p?.seat);
+          if (!Number.isFinite(s)) continue;
+          if (s === seat) continue;
+
+          const pr = gameState?.secret?.roleBySeat?.[s] ?? null;
+          if (!pr) continue;
+
+          if (pr.group === "dictator") {
+            visibleRoleColorsBySeat[s] = pr.color ?? "#991B1B";
+          } else if (pr.group === "agent" || pr.alignment === "fascist") {
+            visibleRoleColorsBySeat[s] = "#ff4d4d";
+          }
+        }
+      }
+
+      // Apply any investigation-learned teams for this player.
+      const knownTeams = gameState?.secret?.knownTeamsBySeat?.[seat] ?? null;
+      if (knownTeams && typeof knownTeams === "object") {
+        for (const [k, v] of Object.entries(knownTeams)) {
+          const s = Number(k);
+          if (!Number.isFinite(s)) continue;
+          const c = teamColor(v);
+          if (!c) continue;
+          if (visibleRoleColorsBySeat[s] != null) continue;
+          visibleRoleColorsBySeat[s] = c;
+        }
+      }
+    }
+
     const clues = gameState?.secret?.cluesBySeat?.[seat] ?? null;
     const lastInvestigation = publicizeInvestigation(gameState?.secret?.lastInvestigationBySeat?.[seat] ?? null);
     my = {
@@ -912,6 +956,11 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     ensureSecretState(gs);
     const r = gs.secret?.roleBySeat?.[target] ?? null;
     const team = getInvestigationTeamFromRole(r);
+
+    if (!gs.secret.knownTeamsBySeat) gs.secret.knownTeamsBySeat = {};
+    if (!gs.secret.knownTeamsBySeat[mySeat]) gs.secret.knownTeamsBySeat[mySeat] = {};
+    if (team) gs.secret.knownTeamsBySeat[mySeat][target] = team;
+
     gs.secret.lastInvestigationBySeat[mySeat] = {
       ts: Date.now(),
       targetSeat: target,
