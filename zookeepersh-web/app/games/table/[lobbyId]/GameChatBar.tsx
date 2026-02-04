@@ -198,12 +198,11 @@ export default function GameChatBar({
   return (
     <section
       style={{
-        height: "80%",          
+        height: "100%",
         minHeight: 0,            
         display: "flex",
         flexDirection: "column",
         background: "transparent",
-        borderLeft: "1px solid rgba(255,255,255,0.08)", 
       }}
     >
       {/* Messages */}

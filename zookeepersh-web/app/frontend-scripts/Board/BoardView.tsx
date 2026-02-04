@@ -126,10 +126,10 @@ export default function BoardView({
     typeof onChancellorEnact === "function";
 
   return (
-    <div style={{ position: "relative" }}>
-      <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
+    <div style={{ position: "relative", width: "100%" }}>
+      <div style={{ display: "grid", gap: 0, justifyItems: "start" }}>
         {boards.map((b) => (
-          <div key={b.key} style={{ position: "relative", width: "100%", maxWidth: 720, zIndex: 0 }}>
+          <div key={b.key} style={{ position: "relative", width: "100%", maxWidth: 675, zIndex: 0 }}>
             <img
               src={b.src}
               alt="Game board"

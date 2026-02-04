@@ -88,6 +88,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
       }
     : undefined;
 
+  const boardStackHeight = "min(440px, calc(35vw * 440 / 650))";
+
   return (
     <div
       style={{
@@ -109,7 +111,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
           alignItems: "stretch",
         }}
       >
-        <div style={{ flex: "1 1 0", minWidth: 0, minHeight: 0 }}>
+        <div style={{ flex: "35 35 0", minWidth: 0, minHeight: 0 }}>
           <div style={{ height: "100%", color: "white" }}>
             <BoardView
               playerCount={playerCount}
@@ -130,7 +132,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               }}
             />
 
-            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+            <div style={{ marginTop: 10 }}>
               <PlayerListView
                 playerCount={playerCount}
                 players={playersForView}
@@ -202,14 +204,21 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
         <aside
           style={{
-            flex: "1 1 0",
+            flex: "65 65 0",
             minWidth: 0,
             minHeight: 0,
             display: "flex",
             flexDirection: "column",
           }}
         >
-          <div style={{ flex: 1, minHeight: 0 }}>
+          <div
+            style={{
+              height: boardStackHeight,
+              minHeight: 0,
+              borderLeft: "1px solid rgba(255,255,255,0.08)",
+              boxSizing: "border-box",
+            }}
+          >
             <GameChatBar
               lobbyId={lobbyId}
               gameStarted={gameStarted}

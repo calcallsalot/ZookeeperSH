@@ -802,10 +802,12 @@ export default function PlayerListView({
   const sitButtonDisabled = Boolean(sitDisabled || !onSit);
 
   const containerStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: 650,
     display: "flex",
-    gap: 10,
+    gap: 8,
     alignItems: "flex-start",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     flexWrap: "wrap",
   };
 
