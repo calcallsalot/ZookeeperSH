@@ -3,8 +3,15 @@ const {
   drawPoliciesWithReshuffle,
   discardPolicies,
 } = require("../../../app/gameLogic/policyDeck");
-const { buildPrivateRoleState } = require("../../../app/gameLogic/roles");
+const { buildCoverRoleBySeat, buildPrivateRoleState } = require("../../../app/gameLogic/roles");
 const { getRoleDescription } = require("../../game/roleDescriptions");
+const {
+  ensureExileState,
+  isSeatExiled,
+  exileSeat,
+  clearAllExiles,
+  clearAllClaimExileUses,
+} = require("../../game/exile");
 
 function getInvestigationTeamFromRole(role) {
   if (!role || typeof role !== "object") return null;
@@ -26,6 +33,11 @@ function teamColor(team) {
   if (team === "liberal") return "#4da3ff";
   if (team === "fascist") return "#ff4d4d";
   return null;
+}
+
+function isExileRoleId(id) {
+  const x = String(id ?? "");
+  return x === "Nun" || x === "Deputy" || x === "Journalist" || x === "Monk";
 }
 
 function publicizeInvestigation(lastInvestigation) {
@@ -80,6 +92,11 @@ function ensureSecretState(gs) {
     gs.secret = buildPrivateRoleState(seatCount);
   }
 
+  // Back-fill cover roles without re-rolling real roles.
+  if (!gs.secret.coverRoleBySeat && gs.secret.roleBySeat) {
+    gs.secret.coverRoleBySeat = buildCoverRoleBySeat({ roleBySeat: gs.secret.roleBySeat, seatCount });
+  }
+
   if (!gs.secret.lastInvestigationBySeat) gs.secret.lastInvestigationBySeat = {};
 
   // Per-investigator remembered info (used for UI coloring, etc.)
@@ -107,10 +124,15 @@ function maybeEmitDeckShuffle({ gs, lobbyId, emitGameSystem, shuffleCounts, isRe
   if (typeof shuffleCounts.liberal !== "number" || typeof shuffleCounts.fascist !== "number") return;
 
   ensurePolicyDeckMeta(gs);
+  ensureExileState(gs);
 
   if (isReshuffle) {
     gs.policyDeckMeta.deckNumber = Number(gs.policyDeckMeta.deckNumber ?? 1) + 1;
     gs.policyDeckMeta.reshuffleCount = Number(gs.policyDeckMeta.reshuffleCount ?? 0) + 1;
+
+    // Exile tokens are discarded after a reshuffle.
+    clearAllExiles(gs);
+    clearAllClaimExileUses(gs);
   }
 
   gs.policyDeckMeta.lastShuffleAt = Date.now();
@@ -128,13 +150,19 @@ function maybeEmitDeckShuffle({ gs, lobbyId, emitGameSystem, shuffleCounts, isRe
 }
 
 function ensureGameState(lobby) {
-  if (lobby.gameState) return;
+  if (lobby.gameState) {
+    ensureExileState(lobby.gameState);
+    ensureSecretState(lobby.gameState);
+    ensurePolicyDeckMeta(lobby.gameState);
+    return;
+  }
 
   const names = lobby.players ?? [];
   const players = names.map((name, idx) => ({
     seat: idx + 1,
     name,
     alive: true,
+    exiled: false,
   }));
 
   const votes = {};
@@ -179,6 +207,7 @@ function ensureGameState(lobby) {
     gameOver: null,
   };
 
+  ensureExileState(lobby.gameState);
   ensureSecretState(lobby.gameState);
 }
 
@@ -204,6 +233,7 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
   if (!gameState) return null;
 
   ensureSecretState(gameState);
+  ensureExileState(gameState);
 
   const phase = gameState.phase;
   const players = Array.isArray(gameState.players) ? gameState.players : [];
@@ -250,6 +280,7 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
       if (s === election.presidentSeat) return false;
       if (tlp != null && s === tlp) return false;
       if (tlc != null && s === tlc) return false;
+      if (isSeatExiled(gameState, s)) return false;
       return true;
     });
   }
@@ -275,6 +306,15 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
 
   // Only show the recipient their own role color (roadmap later: fascists see fascists+Hitler).
   const visibleRoleColorsBySeat = {};
+
+  const exiledSeats = [];
+  for (const [k, v] of Object.entries(gameState?.exile?.exiledBySeat ?? {})) {
+    if (v !== true) continue;
+    const s = Number(k);
+    if (!Number.isFinite(s)) continue;
+    exiledSeats.push(s);
+  }
+  exiledSeats.sort((a, b) => a - b);
 
   const isGameOver = phase === "game_over" || Boolean(gameState?.gameOver);
   const revealedRolesBySeat = isGameOver ? {} : null;
@@ -337,6 +377,28 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
 
     const clues = gameState?.secret?.cluesBySeat?.[seat] ?? null;
     const lastInvestigation = publicizeInvestigation(gameState?.secret?.lastInvestigationBySeat?.[seat] ?? null);
+
+    const cover =
+      r?.alignment === "fascist" ? gameState?.secret?.coverRoleBySeat?.[seat] ?? null : null;
+
+    const me = players.find((p) => p.seat === seat) ?? null;
+    const iAmAlive = me?.alive !== false;
+    const deckNumber = Number(gameState?.policyDeckMeta?.deckNumber ?? 1);
+    const usedDeckNumber = Number(gameState?.exile?.claimExileUsedDeckBySeat?.[seat] ?? 0);
+
+    const inOffice = seat === election.presidentSeat || seat === election.nominatedChancellorSeat;
+    const hasExilePower =
+      isExileRoleId(r?.id) || (r?.alignment === "fascist" && isExileRoleId(cover?.id));
+
+    const canExile =
+      iAmAlive &&
+      phase === "election_nomination" &&
+      !inOffice &&
+      !isSeatExiled(gameState, seat) &&
+      hasExilePower &&
+      Number.isFinite(deckNumber) &&
+      usedDeckNumber !== deckNumber;
+
     my = {
       seat,
       role: r
@@ -348,6 +410,17 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
             description: getRoleDescription(r.id),
           }
         : null,
+      coverRole: cover
+        ? {
+            id: cover.id,
+            group: cover.group,
+            alignment: cover.alignment,
+            color: cover.color,
+            description: getRoleDescription(cover.id),
+          }
+        : null,
+      canExile: Boolean(canExile),
+      canClaimExile: Boolean(canExile),
       clues,
       lastInvestigation,
     };
@@ -362,6 +435,7 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     lastEnactedPolicy: gameState.lastEnactedPolicy,
     legislative,
     visibleRoleColorsBySeat,
+    exile: { exiledSeats },
     power: gameState.power ?? null,
     gameOver: gameState.gameOver ?? null,
     revealedRolesBySeat,
@@ -456,9 +530,9 @@ function scheduleCloseLobby(gameState, closeLobby, lobbyId) {
   setTimeout(() => closeLobby(lobbyId, "game-over"), delayMs);
 }
 
-function nextAlivePresidentSeat(players, currentSeat) {
+function nextAlivePresidentSeat(players, currentSeat, exiledBySeat) {
   const alive = (players ?? [])
-    .filter((p) => p.alive)
+    .filter((p) => p.alive && exiledBySeat?.[p.seat] !== true)
     .map((p) => p.seat)
     .sort((a, b) => a - b);
 
@@ -472,10 +546,10 @@ function nextPresidentSeatAfterRound(gameState) {
   const ret = gs?.election?.specialElectionReturnSeat;
   if (ret != null && Number.isFinite(Number(ret))) {
     gs.election.specialElectionReturnSeat = null;
-    return nextAlivePresidentSeat(gs.players, Number(ret) - 1);
+    return nextAlivePresidentSeat(gs.players, Number(ret) - 1, gs?.exile?.exiledBySeat);
   }
 
-  return nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+  return nextAlivePresidentSeat(gs.players, gs.election.presidentSeat, gs?.exile?.exiledBySeat);
 }
 
 function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, gameRoom, emitGameSystem, closeLobby }) {
@@ -518,6 +592,8 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     const tlc = gs?.election?.termLockedChancellorSeat ?? null;
     if (tlp != null && target === tlp) return;
     if (tlc != null && target === tlc) return;
+
+    if (isSeatExiled(gs, target)) return;
 
     const aliveSeats = gs.players.filter((p) => p.alive).map((p) => p.seat);
     if (!aliveSeats.includes(target)) return;
@@ -819,6 +895,7 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
 
     const aliveSeats = getAliveSeats(gs);
     const eligiblePowerTargets = aliveSeats.filter((s) => s !== gs.election.presidentSeat);
+    const eligibleSpecialElectionTargets = eligiblePowerTargets.filter((s) => !isSeatExiled(gs, s));
 
     const votes2 = {};
     for (const s of aliveSeats) votes2[s] = null;
@@ -844,11 +921,15 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
         gs.power = {
           type: "special_election",
           presidentSeat: gs.election.presidentSeat,
-          eligibleSeats: eligiblePowerTargets,
+          eligibleSeats: eligibleSpecialElectionTargets,
         };
 
         if (gs.election.specialElectionReturnSeat == null) {
-          gs.election.specialElectionReturnSeat = nextAlivePresidentSeat(gs.players, gs.election.presidentSeat);
+          gs.election.specialElectionReturnSeat = nextAlivePresidentSeat(
+            gs.players,
+            gs.election.presidentSeat,
+            gs?.exile?.exiledBySeat
+          );
         }
 
         if (emitGameSystem) {
@@ -924,6 +1005,199 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     if (emitGameSystem) {
       emitGameSystem(lobbyId, `Special election: Seat ${target} is the next President.`).catch(() => {});
     }
+
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
+  });
+
+  socket.on("game:role:exile", ({ lobbyId, targetSeat } = {}) => {
+    if (typeof lobbyId !== "string") return;
+    if (!isPlayerInLobby(socket.id, lobbyId, playerLobby)) return;
+
+    const lobby = lobbies.get(lobbyId);
+    if (!lobby) return;
+    if (lobby.status !== "in_game") return;
+
+    ensureGameState(lobby);
+    const gs = lobby.gameState;
+
+    if (gs.phase === "game_over") return;
+    if (gs.phase !== "election_nomination") return;
+
+    const mySeat = getMySeat(lobby, socket, online);
+    if (!mySeat) return;
+    if (!isSeatAlive(gs, mySeat)) return;
+
+    ensureSecretState(gs);
+    ensureExileState(gs);
+    ensurePolicyDeckMeta(gs);
+
+    const myRole = gs.secret?.roleBySeat?.[mySeat] ?? null;
+    const cover =
+      myRole?.alignment === "fascist" ? gs.secret?.coverRoleBySeat?.[mySeat] ?? null : null;
+    const hasExilePower =
+      isExileRoleId(myRole?.id) || (myRole?.alignment === "fascist" && isExileRoleId(cover?.id));
+    if (!hasExilePower) return;
+
+    const deckNumber = Number(gs.policyDeckMeta?.deckNumber ?? 1);
+    if (!Number.isFinite(deckNumber)) return;
+
+    const lastUsedDeck = Number(gs.exile?.claimExileUsedDeckBySeat?.[mySeat] ?? 0);
+    if (Number.isFinite(lastUsedDeck) && lastUsedDeck === deckNumber) return;
+
+    const target = mySeat;
+    if (isSeatExiled(gs, target)) return;
+
+    const res = exileSeat(gs, target);
+    if (!res?.ok) return;
+
+    gs.exile.claimExileUsedDeckBySeat[mySeat] = deckNumber;
+
+    if (emitGameSystem) {
+      emitGameSystem(lobbyId, `Seat ${mySeat} has self-exiled.`).catch(() => {});
+    }
+
+     // Nun learns living fascist neighbors of the exiled seat.
+     if (myRole?.id === "Nun") {
+       const n = Array.isArray(gs.players) ? gs.players.length : 0;
+       const prev = n > 0 ? (target === 1 ? n : target - 1) : null;
+       const next = n > 0 ? (target === n ? 1 : target + 1) : null;
+
+       let count = 0;
+       for (const s of [prev, next]) {
+         if (s == null) continue;
+         if (!isSeatAlive(gs, s)) continue;
+         const rr = gs.secret?.roleBySeat?.[s] ?? null;
+         const team = getInvestigationTeamFromRole(rr);
+         if (team === "fascist") count += 1;
+       }
+
+       gs.secret.lastInvestigationBySeat[mySeat] = {
+         ts: Date.now(),
+         targetSeat: target,
+         result: {
+           kind: "text",
+           text: `Nun info: Seat ${target} has ${count} living fascist neighbor${count === 1 ? "" : "s"}.`,
+         },
+       };
+     }
+
+     // Deputy/Journalist/Monk follow-up picks happen immediately after exiling.
+     if (myRole?.id === "Deputy" || myRole?.id === "Journalist" || myRole?.id === "Monk") {
+       const aliveSeats = getAliveSeats(gs);
+       const kind = myRole.id === "Deputy" ? "deputy" : myRole.id === "Journalist" ? "journalist" : "monk";
+       const pickCount = kind === "monk" ? 2 : 3;
+       const eligibleSeats =
+         kind === "monk" ? aliveSeats.filter((s) => s !== mySeat) : aliveSeats;
+
+       gs.phase = "power_role_pick";
+       gs.power = {
+         type: "role_pick",
+         kind,
+         actorSeat: mySeat,
+         pickCount,
+         pickedSeats: [],
+         eligibleSeats: eligibleSeats.sort((a, b) => a - b),
+         resumePhase: "election_nomination",
+       };
+
+       if (emitGameSystem) {
+         emitGameSystem(lobbyId, `Seat ${mySeat} must choose ${pickCount} player${pickCount === 1 ? "" : "s"}.`).catch(
+           () => {}
+         );
+       }
+
+       emitGameState({ io, lobbyId, lobby, playerLobby, online });
+       return;
+     }
+
+    emitGameState({ io, lobbyId, lobby, playerLobby, online });
+  });
+
+  socket.on("game:power:rolePick", ({ lobbyId, targetSeat } = {}) => {
+    if (typeof lobbyId !== "string") return;
+    if (!isPlayerInLobby(socket.id, lobbyId, playerLobby)) return;
+
+    const lobby = lobbies.get(lobbyId);
+    if (!lobby) return;
+    if (lobby.status !== "in_game") return;
+
+    ensureGameState(lobby);
+    const gs = lobby.gameState;
+
+    if (gs.phase === "game_over") return;
+    if (gs.phase !== "power_role_pick") return;
+    if (gs.power?.type !== "role_pick") return;
+
+    const mySeat = getMySeat(lobby, socket, online);
+    if (!mySeat) return;
+    if (!isSeatAlive(gs, mySeat)) return;
+    if (mySeat !== gs.power.actorSeat) return;
+
+    const target = Number(targetSeat);
+    if (!Number.isFinite(target)) return;
+    if (!Array.isArray(gs.power.eligibleSeats) || !gs.power.eligibleSeats.includes(target)) return;
+    if (!isSeatAlive(gs, target)) return;
+
+    ensureSecretState(gs);
+
+    if (!Array.isArray(gs.power.pickedSeats)) gs.power.pickedSeats = [];
+    if (gs.power.pickedSeats.includes(target)) return;
+    gs.power.pickedSeats.push(target);
+    gs.power.eligibleSeats = (gs.power.eligibleSeats ?? []).filter((s) => s !== target);
+
+    const pickCount = Number(gs.power.pickCount ?? 0);
+    if (!Number.isFinite(pickCount) || pickCount <= 0) return;
+
+    if (gs.power.pickedSeats.length < pickCount) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    const picks = gs.power.pickedSeats.slice(0, pickCount).map((x) => Number(x)).filter((x) => Number.isFinite(x));
+    const kind = String(gs.power.kind ?? "");
+
+    let text = null;
+
+    if (kind === "deputy") {
+      const c = picks.reduce((acc, s) => {
+        const rr = gs.secret?.roleBySeat?.[s] ?? null;
+        return acc + (rr?.group === "dissident" ? 1 : 0);
+      }, 0);
+      text = `Deputy info: ${c} dissident${c === 1 ? "" : "s"} among seats ${picks.join(", ")}.`;
+    } else if (kind === "journalist") {
+      const c = picks.reduce((acc, s) => {
+        const rr = gs.secret?.roleBySeat?.[s] ?? null;
+        const team = getInvestigationTeamFromRole(rr);
+        return acc + (team === "liberal" ? 1 : 0);
+      }, 0);
+      text = `Journalist info: ${c} liberal${c === 1 ? "" : "s"} among seats ${picks.join(", ")}.`;
+    } else if (kind === "monk") {
+      const [a, b] = picks;
+      const ra = gs.secret?.roleBySeat?.[a] ?? null;
+      const rb = gs.secret?.roleBySeat?.[b] ?? null;
+      const ta = getInvestigationTeamFromRole(ra);
+      const tb = getInvestigationTeamFromRole(rb);
+      const same = ta != null && tb != null ? ta === tb : null;
+      text =
+        same == null
+          ? `Monk info: inconclusive.`
+          : `Monk info: Seats ${a} and ${b} ${same ? "share" : "do not share"} the same alignment.`;
+    }
+
+    if (emitGameSystem) {
+      emitGameSystem(lobbyId, `Seat ${mySeat} chooses seats ${picks.join(", ")}.`).catch(() => {});
+    }
+
+    if (text) {
+      gs.secret.lastInvestigationBySeat[mySeat] = {
+        ts: Date.now(),
+        result: { kind: "text", text },
+      };
+    }
+
+    const resume = String(gs.power.resumePhase ?? "election_nomination");
+    gs.power = null;
+    gs.phase = resume;
 
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });

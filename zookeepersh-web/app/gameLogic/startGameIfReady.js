@@ -20,6 +20,7 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
       seat: idx + 1,
       name,
       alive: true,
+      exiled: false,
     })),
     election: {
       presidentSeat: 1,
@@ -57,6 +58,8 @@ function startGameIfReady({ io, lobbies, lobbyId, gameRoom, lobbyListPublic, emi
 
   // Private, per-seat info (NEVER broadcast directly)
   gameState.secret = buildPrivateRoleState(seatOrder.length);
+  // Deck-scoped role choices (Usher/Noble/Insurrectionary) should run for deck 1.
+  gameState.secret.deckJustStarted = true;
 
   // store updated lobby
   const nextLobby = {

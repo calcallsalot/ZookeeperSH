@@ -90,6 +90,36 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
   const boardStackHeight = "min(440px, calc(35vw * 440 / 650))";
 
+  const exiledSeats = useMemo(() => {
+    if (!gameStarted) return [];
+    const list = gameState?.exile?.exiledSeats;
+    return Array.isArray(list) ? list.filter((x: any) => typeof x === "number") : [];
+  }, [gameStarted, gameState?.exile?.exiledSeats]);
+
+  const exileEnabled = Boolean(gameStarted && myAlive && (gameState?.my?.canExile === true || gameState?.my?.canClaimExile === true));
+
+  const eligibleExileSeats = useMemo(() => {
+    if (!exileEnabled) return undefined;
+    const exiled = new Set(exiledSeats);
+    const pres = gameState?.election?.presidentSeat;
+    const chan = gameState?.election?.nominatedChancellorSeat;
+
+    const out: number[] = [];
+    const list = Array.isArray(gameState?.players) ? gameState.players : [];
+    for (const p of list) {
+      const s = p?.seat;
+      if (typeof s !== "number") continue;
+      if (p?.alive === false) continue;
+      if (s === pres) continue;
+      if (s === chan) continue;
+      if (exiled.has(s)) continue;
+      out.push(s);
+    }
+
+    out.sort((a, b) => a - b);
+    return out;
+  }, [exileEnabled, exiledSeats, gameState?.election?.nominatedChancellorSeat, gameState?.election?.presidentSeat, gameState?.players]);
+
   return (
     <div
       style={{
@@ -136,6 +166,7 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               <PlayerListView
                 playerCount={playerCount}
                 players={playersForView}
+                mySeat={mySeat ?? undefined}
                 showSitButton={showSitButton}
                 sitDisabled={sitDisabled}
                 onSit={showSitButton ? () => sitInLobby(lobbyId) : undefined}
@@ -150,6 +181,26 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 visibleRoleColorsBySeat={gameStarted ? gameState?.visibleRoleColorsBySeat : undefined}
                 aliveBySeat={gameStarted ? aliveBySeat : undefined}
                 revealedRolesBySeat={gameStarted ? gameState?.revealedRolesBySeat ?? null : null}
+                exiledSeats={gameStarted ? exiledSeats : undefined}
+                exileEnabled={exileEnabled}
+                eligibleExileSeats={eligibleExileSeats}
+                onExile={(seat) => {
+                  socket?.emit?.("game:role:exile", { lobbyId, targetSeat: seat });
+                }}
+                rolePickEnabled={
+                  Boolean(
+                    gameStarted &&
+                      gameState?.phase === "power_role_pick" &&
+                      mySeat != null &&
+                      gameState?.power?.actorSeat === mySeat
+                  )
+                }
+                eligibleRolePickSeats={
+                  gameStarted && gameState?.phase === "power_role_pick" ? gameState?.power?.eligibleSeats : undefined
+                }
+                onRolePick={(seat: number) => {
+                  socket?.emit?.("game:power:rolePick", { lobbyId, targetSeat: seat });
+                }}
                 nominateEnabled={
                   Boolean(
                     gameStarted &&
@@ -226,6 +277,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               myElo={myElo}
               myAlive={myAlive}
               myRole={gameStarted ? gameState?.my?.role ?? null : null}
+              myCoverRole={gameStarted ? gameState?.my?.coverRole ?? null : null}
+              myClues={gameStarted ? gameState?.my?.clues ?? null : null}
               myLastInvestigation={gameStarted ? gameState?.my?.lastInvestigation ?? null : null}
             />
           </div>

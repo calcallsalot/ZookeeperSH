@@ -67,6 +67,8 @@ export default function GameChatBar({
   myElo,
   myAlive,
   myRole,
+  myCoverRole,
+  myClues,
   myLastInvestigation,
 }: {
   lobbyId: string;
@@ -75,6 +77,8 @@ export default function GameChatBar({
   myElo?: number | null;
   myAlive?: boolean;
   myRole?: { id: string; color?: string; description?: string | null } | null;
+  myCoverRole?: { id: string; color?: string; description?: string | null } | null;
+  myClues?: { bureaucratFascistPairs?: number | null } | null;
   myLastInvestigation?:
     | {
         ts?: number;
@@ -140,34 +144,69 @@ export default function GameChatBar({
             <span style={{ color: myRole.color ?? "white", fontWeight: 900 }}>{myRole.id}</span> and take seat{" "}
             <span style={{ fontWeight: 900 }}>{mySeat}</span>
             {myRole.description ? `\n${myRole.description}` : ""}
+            {myCoverRole?.id ? (
+              <>
+                {"\n"}Your fake liberal role is{" "}
+                <span style={{ color: myCoverRole.color ?? "white", fontWeight: 900 }}>{myCoverRole.id}</span>
+                {myCoverRole.description ? `\n${myCoverRole.description}` : ""}
+              </>
+            ) : null}
           </span>
         ),
       });
     }
 
-    const invTeam = getTeamFromInvestigation(myLastInvestigation);
-    if (gameStarted && myLastInvestigation?.targetSeat != null && invTeam) {
-      const ts = typeof myLastInvestigation.ts === "number" ? myLastInvestigation.ts : Date.now();
-      const teamColor = invTeam === "liberal" ? "#4da3ff" : "#ff4d4d";
+    // Bureaucrat starting info (private)
+    const pairsRaw = myClues?.bureaucratFascistPairs;
+    const pairs = typeof pairsRaw === "number" && Number.isFinite(pairsRaw) ? pairsRaw : null;
+    if (gameStarted && myRole?.id === "Bureaucrat" && pairs != null) {
       out.push({
-        id: `local:investigate:${lobbyId}:${ts}`,
+        id: `local:clue:bureaucrat:${lobbyId}`,
+        lobbyId,
+        kind: "system",
+        ts: 0,
+        content: (
+          <span>
+            There {pairs === 1 ? "is" : "are"}{" "}
+            <span style={{ fontWeight: 900 }}>{pairs}</span> fascist {pairs === 1 ? "pair" : "pairs"}.
+          </span>
+        ),
+      });
+    }
+
+    const invResult = myLastInvestigation?.result as any;
+    if (gameStarted && invResult?.kind === "text" && typeof invResult?.text === "string" && invResult.text.trim()) {
+      const ts = typeof myLastInvestigation?.ts === "number" ? myLastInvestigation.ts : Date.now();
+      out.push({
+        id: `local:private:${lobbyId}:${ts}`,
         lobbyId,
         kind: "system",
         ts,
-        content: (
-          <span>
-            Investigation result: Seat{" "}
-            <span style={{ fontWeight: 900 }}>{myLastInvestigation.targetSeat}</span> is{" "}
-            <span style={{ color: teamColor, fontWeight: 900 }}>
-              {invTeam}
-            </span>
-          </span>
-        ),
+        content: <span>{invResult.text}</span>,
       });
+    } else {
+      const invTeam = getTeamFromInvestigation(myLastInvestigation);
+      if (gameStarted && myLastInvestigation?.targetSeat != null && invTeam) {
+        const ts = typeof myLastInvestigation.ts === "number" ? myLastInvestigation.ts : Date.now();
+        const teamColor = invTeam === "liberal" ? "#4da3ff" : "#ff4d4d";
+        out.push({
+          id: `local:investigate:${lobbyId}:${ts}`,
+          lobbyId,
+          kind: "system",
+          ts,
+          content: (
+            <span>
+              Investigation result: Seat{" "}
+              <span style={{ fontWeight: 900 }}>{myLastInvestigation.targetSeat}</span> is{" "}
+              <span style={{ color: teamColor, fontWeight: 900 }}>{invTeam}</span>
+            </span>
+          ),
+        });
+      }
     }
 
     return out;
-  }, [gameStarted, lobbyId, myLastInvestigation, myRole, mySeat]);
+  }, [gameStarted, lobbyId, myClues, myCoverRole, myLastInvestigation, myRole, mySeat]);
 
   const viewMessages = useMemo(() => {
     const combined = [...localSystem, ...sorted];
