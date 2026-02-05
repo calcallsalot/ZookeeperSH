@@ -1,5 +1,9 @@
 const { shuffle } = require("./shuffle");
 
+const {
+  getStartingFascistPairs: getBureaucratStartingFascistPairs,
+} = require("../../server/game/roles/liberals/loyalists/Bureaucrat");
+
 // Role groups (docs/roles.txt)
 const ROLE_GROUPS = {
   loyalist: [
@@ -119,16 +123,27 @@ function buildPrivateRoleState(seatCount) {
   /** @type {Record<number, any>} */
   const cluesBySeat = {};
 
-  const fascistPairs = countAdjacentFascistPairs(roleBySeat, seatCount);
+  /** @type {Record<number, boolean>} */
+  const learningRumorsBySeat = {};
+  for (let s = 1; s <= seatCount; s += 1) {
+    // Baseline: Rumorist always learns rumors.
+    learningRumorsBySeat[s] = roleBySeat?.[s]?.id === "Rumorist";
+  }
+
+  // Bureaucrat starting info
   for (let s = 1; s <= seatCount; s += 1) {
     if (roleBySeat[s]?.id === "Bureaucrat") {
       cluesBySeat[s] = {
-        bureaucratFascistPairs: fascistPairs,
+        bureaucratFascistPairs: getBureaucratStartingFascistPairs({
+          roleBySeat,
+          seatCount,
+          learningRumors: learningRumorsBySeat[s] === true,
+        }),
       };
     }
   }
 
-  return { roleBySeat, cluesBySeat };
+  return { roleBySeat, cluesBySeat, learningRumorsBySeat };
 }
 
 module.exports = {
