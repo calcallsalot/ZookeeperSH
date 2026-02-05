@@ -12,6 +12,12 @@ const {
   clearAllExiles,
   clearAllClaimExileUses,
 } = require("../../game/exile");
+const {
+  ensureClaimsState,
+  setCardsClaimGovernment,
+  initInv2Claim,
+  markInv2InvestigationComplete,
+} = require("../../game/claims");
 
 function getInvestigationTeamFromRole(role) {
   if (!role || typeof role !== "object") return null;
@@ -154,6 +160,7 @@ function ensureGameState(lobby) {
     ensureExileState(lobby.gameState);
     ensureSecretState(lobby.gameState);
     ensurePolicyDeckMeta(lobby.gameState);
+    ensureClaimsState(lobby.gameState);
     return;
   }
 
@@ -209,6 +216,7 @@ function ensureGameState(lobby) {
 
   ensureExileState(lobby.gameState);
   ensureSecretState(lobby.gameState);
+  ensureClaimsState(lobby.gameState);
 }
 
 function getSeatForSocketId(lobby, socketId, online) {
@@ -889,6 +897,9 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
       return;
     }
 
+    // Claims: the most recently enacted government can claim cards (once each).
+    setCardsClaimGovernment(gs, gs.election.presidentSeat, gs.election.nominatedChancellorSeat);
+
     // End the legislative session.
     gs.legislative = null;
     gs.election.nominatedChancellorSeat = null;
@@ -907,6 +918,8 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
     if (enacted === "fascist") {
       const fas = Number(gs.enactedPolicies.fascist ?? 0);
       if (fas === 2) {
+        // Investigation claim eligibility is tied to the president who enacted the 2nd fascist policy.
+        initInv2Claim(gs, gs.election.presidentSeat);
         gs.phase = "power_investigate";
         gs.power = {
           type: "investigate",
@@ -1240,6 +1253,9 @@ function registerElectionHandlers({ io, socket, lobbies, online, playerLobby, ga
       targetSeat: target,
       result: team ? { kind: "team", team } : null,
     };
+
+    // If this investigation was triggered by the 2nd fascist policy, enable the president's inv-claim.
+    markInv2InvestigationComplete(gs, mySeat, target);
 
     gs.power = null;
 
