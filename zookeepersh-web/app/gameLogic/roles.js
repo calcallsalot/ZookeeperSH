@@ -50,6 +50,52 @@ function buildRole(roleId, group) {
   };
 }
 
+function groupForRoleId(roleId) {
+  const id = String(roleId ?? "");
+  if (ROLE_GROUPS.loyalist.includes(id)) return "loyalist";
+  if (ROLE_GROUPS.dissident.includes(id)) return "dissident";
+  if (ROLE_GROUPS.agent.includes(id)) return "agent";
+  if (ROLE_GROUPS.dictator.includes(id)) return "dictator";
+  return null;
+}
+
+function buildCoverRoleBySeat({ roleBySeat, seatCount }) {
+  const n = Number(seatCount ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return {};
+
+  /** @type {Set<string>} */
+  const takenRoleIds = new Set();
+  for (let s = 1; s <= n; s += 1) {
+    const r = roleBySeat?.[s];
+    if (r?.id) takenRoleIds.add(String(r.id));
+  }
+
+  // Cover roles are liberal roles not used by any real role this game.
+  const liberalRoleIds = [...ROLE_GROUPS.loyalist, ...ROLE_GROUPS.dissident];
+  const coverPool = shuffle(liberalRoleIds.filter((id) => !takenRoleIds.has(String(id))));
+
+  /** @type {Record<number, any>} */
+  const coverRoleBySeat = {};
+  let i = 0;
+
+  for (let s = 1; s <= n; s += 1) {
+    if (!isFascistRole(roleBySeat?.[s])) continue;
+
+    let coverId = coverPool.length > 0 ? coverPool[i % coverPool.length] : null;
+    i += 1;
+
+    if (!coverId) {
+      // Extremely unlikely for normal player counts; fallback to any liberal role.
+      coverId = liberalRoleIds[Math.floor(Math.random() * liberalRoleIds.length)] ?? "Inspector";
+    }
+
+    const g = groupForRoleId(coverId) ?? "loyalist";
+    coverRoleBySeat[s] = buildRole(coverId, g);
+  }
+
+  return coverRoleBySeat;
+}
+
 function assignRolesFor7() {
   // 7-player baseline: 4 Liberals (2 loyalist + 2 dissident), 3 Fascists (2 agent + Hitler)
   // Guarantee Bureaucrat exists for its starting info.
@@ -120,6 +166,9 @@ function buildPrivateRoleState(seatCount) {
     roleBySeat[i + 1] = roles[i] ?? buildRole("Inspector", "loyalist");
   }
 
+  // Fascists receive a private "cover" liberal role that is not used in this game.
+  const coverRoleBySeat = buildCoverRoleBySeat({ roleBySeat, seatCount });
+
   /** @type {Record<number, any>} */
   const cluesBySeat = {};
 
@@ -143,7 +192,7 @@ function buildPrivateRoleState(seatCount) {
     }
   }
 
-  return { roleBySeat, cluesBySeat, learningRumorsBySeat };
+  return { roleBySeat, coverRoleBySeat, cluesBySeat, learningRumorsBySeat };
 }
 
 module.exports = {
@@ -151,6 +200,8 @@ module.exports = {
   ROLE_GROUP_TO_ALIGNMENT,
   ROLE_GROUP_TO_COLOR,
   buildRole,
+  groupForRoleId,
+  buildCoverRoleBySeat,
   assignRolesForPlayerCount,
   countAdjacentFascistPairs,
   buildPrivateRoleState,

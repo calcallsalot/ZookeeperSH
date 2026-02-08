@@ -336,6 +336,7 @@ function AvatarTile({
   roleColor,
   revealedRoleName,
   isDead,
+  isExiled,
   isChancellor,
   isChancellorTL,
   isPresident,
@@ -356,12 +357,21 @@ function AvatarTile({
   specialElectionEnabled,
   eligibleSpecialElectionSeats,
   onSpecialElection,
+
+  rolePickEnabled,
+  eligibleRolePickSeats,
+  onRolePick,
+
+  exileEnabled,
+  eligibleExileSeats,
+  onExile,
 }: {
   seat: number;
   name: string;
   roleColor?: string | null;
   revealedRoleName?: string | null;
   isDead?: boolean;
+  isExiled?: boolean;
   isChancellor?: boolean;
   isChancellorTL?: boolean;
   isPresident?: boolean;
@@ -385,6 +395,14 @@ function AvatarTile({
   specialElectionEnabled?: boolean;
   eligibleSpecialElectionSeats?: number[];
   onSpecialElection?: (seat: number) => void;
+
+  rolePickEnabled?: boolean;
+  eligibleRolePickSeats?: number[];
+  onRolePick?: (seat: number) => void;
+
+  exileEnabled?: boolean;
+  eligibleExileSeats?: number[];
+  onExile?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
@@ -396,7 +414,9 @@ function AvatarTile({
   const backSrc = isDead ? undefined : isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
   const action =
-    !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
+    !isDead && rolePickEnabled && onRolePick && eligibleRolePickSeats?.includes(seat) === true
+      ? ("role_pick" as const)
+      : !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
       ? ("execute" as const)
       : !isDead && investigateEnabled && onInvestigate && eligibleInvestigateSeats?.includes(seat) === true
         ? ("investigate" as const)
@@ -414,7 +434,9 @@ function AvatarTile({
           : null;
 
   const highlightColor =
-    action === "execute"
+    action === "role_pick"
+      ? "rgba(34, 211, 238, 0.92)"
+      : action === "execute"
       ? "rgba(255, 77, 77, 0.92)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.92)"
@@ -425,7 +447,9 @@ function AvatarTile({
           : undefined;
 
   const highlightGlow =
-    action === "execute"
+    action === "role_pick"
+      ? "rgba(34, 211, 238, 0.18)"
+      : action === "execute"
       ? "rgba(255, 77, 77, 0.18)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.18)"
@@ -434,6 +458,13 @@ function AvatarTile({
         : action === "nominate"
           ? "rgba(255, 214, 0, 0.16)"
           : undefined;
+
+  const canExile =
+    !isDead &&
+    !isExiled &&
+    exileEnabled &&
+    onExile &&
+    eligibleExileSeats?.includes(seat) === true;
 
   return (
     <div style={{ width: 86 }}>
@@ -481,7 +512,8 @@ function AvatarTile({
         highlightColor={highlightColor}
         highlightGlow={highlightGlow}
         onClick={() => {
-          if (action === "execute") onExecute?.(seat);
+          if (action === "role_pick") onRolePick?.(seat);
+          else if (action === "execute") onExecute?.(seat);
           else if (action === "investigate") onInvestigate?.(seat);
           else if (action === "special_election") onSpecialElection?.(seat);
           else if (action === "nominate") onNominate?.(seat);
@@ -498,6 +530,53 @@ function AvatarTile({
         <TermLockBadges isPresidentTL={isPresidentTL} isChancellorTL={isChancellorTL} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
+
+      {!exileEnabled && isExiled ? (
+        <div
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.18)",
+            background: "rgba(0,0,0,0.28)",
+            color: "rgba(255,255,255,0.70)",
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 0.6,
+            fontFamily: "var(--font-comfortaa)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          EXILED
+        </div>
+      ) : null}
+
+      {exileEnabled ? (
+        <button
+          type="button"
+          onClick={() => onExile?.(seat)}
+          disabled={!canExile}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.22)",
+            background: canExile ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)",
+            color: canExile ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.40)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: canExile ? "pointer" : "not-allowed",
+          }}
+        >
+          {isExiled ? "Exiled" : "Exile"}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -550,6 +629,7 @@ function CardTile({
   roleColor,
   revealedRoleName,
   isDead,
+  isExiled,
   isChancellor,
   isChancellorTL,
   isPresident,
@@ -570,12 +650,21 @@ function CardTile({
   specialElectionEnabled,
   eligibleSpecialElectionSeats,
   onSpecialElection,
+
+  exileEnabled,
+  eligibleExileSeats,
+  onExile,
+
+  rolePickEnabled,
+  eligibleRolePickSeats,
+  onRolePick,
 }: {
   seat: number;
   name: string;
   roleColor?: string | null;
   revealedRoleName?: string | null;
   isDead?: boolean;
+  isExiled?: boolean;
   isChancellor?: boolean;
   isChancellorTL?: boolean;
   isPresident?: boolean;
@@ -600,6 +689,14 @@ function CardTile({
   specialElectionEnabled?: boolean;
   eligibleSpecialElectionSeats?: number[];
   onSpecialElection?: (seat: number) => void;
+
+  exileEnabled?: boolean;
+  eligibleExileSeats?: number[];
+  onExile?: (seat: number) => void;
+
+  rolePickEnabled?: boolean;
+  eligibleRolePickSeats?: number[];
+  onRolePick?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
@@ -611,7 +708,9 @@ function CardTile({
   const backSrc = isDead ? undefined : isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
   const action =
-    !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
+    !isDead && rolePickEnabled && onRolePick && eligibleRolePickSeats?.includes(seat) === true
+      ? ("role_pick" as const)
+      : !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
       ? ("execute" as const)
       : !isDead && investigateEnabled && onInvestigate && eligibleInvestigateSeats?.includes(seat) === true
         ? ("investigate" as const)
@@ -629,7 +728,9 @@ function CardTile({
           : null;
 
   const highlightColor =
-    action === "execute"
+    action === "role_pick"
+      ? "rgba(34, 211, 238, 0.92)"
+      : action === "execute"
       ? "rgba(255, 77, 77, 0.92)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.92)"
@@ -640,7 +741,9 @@ function CardTile({
           : undefined;
 
   const highlightGlow =
-    action === "execute"
+    action === "role_pick"
+      ? "rgba(34, 211, 238, 0.18)"
+      : action === "execute"
       ? "rgba(255, 77, 77, 0.18)"
       : action === "investigate"
         ? "rgba(77, 163, 255, 0.18)"
@@ -649,6 +752,13 @@ function CardTile({
         : action === "nominate"
           ? "rgba(255, 214, 0, 0.16)"
           : undefined;
+
+  const canExile =
+    !isDead &&
+    !isExiled &&
+    exileEnabled &&
+    onExile &&
+    eligibleExileSeats?.includes(seat) === true;
 
   return (
     <div style={{ width: 86 }}>
@@ -696,7 +806,8 @@ function CardTile({
         highlightColor={highlightColor}
         highlightGlow={highlightGlow}
         onClick={() => {
-          if (action === "execute") onExecute?.(seat);
+          if (action === "role_pick") onRolePick?.(seat);
+          else if (action === "execute") onExecute?.(seat);
           else if (action === "investigate") onInvestigate?.(seat);
           else if (action === "special_election") onSpecialElection?.(seat);
           else if (action === "nominate") onNominate?.(seat);
@@ -713,6 +824,53 @@ function CardTile({
         <TermLockBadges isPresidentTL={isPresidentTL} isChancellorTL={isChancellorTL} />
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
+
+      {!exileEnabled && isExiled ? (
+        <div
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.18)",
+            background: "rgba(0,0,0,0.28)",
+            color: "rgba(255,255,255,0.70)",
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 0.6,
+            fontFamily: "var(--font-comfortaa)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          EXILED
+        </div>
+      ) : null}
+
+      {exileEnabled ? (
+        <button
+          type="button"
+          onClick={() => onExile?.(seat)}
+          disabled={!canExile}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.22)",
+            background: canExile ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)",
+            color: canExile ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.40)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: canExile ? "pointer" : "not-allowed",
+          }}
+        >
+          {isExiled ? "Exiled" : "Exile"}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -720,6 +878,7 @@ function CardTile({
 export default function PlayerListView({
   playerCount,
   players,
+  mySeat,
   chancellorSeat,
   presidentSeat,
 
@@ -737,6 +896,11 @@ export default function PlayerListView({
   aliveBySeat,
   revealedRolesBySeat,
 
+  exiledSeats,
+  exileEnabled,
+  eligibleExileSeats,
+  onExile,
+
   // nomination
   nominateEnabled,
   onNominateChancellor,
@@ -753,12 +917,17 @@ export default function PlayerListView({
   eligibleSpecialElectionSeats,
   onSpecialElection,
 
+  rolePickEnabled,
+  eligibleRolePickSeats,
+  onRolePick,
+
   showSitButton,
   onSit,
   sitDisabled,
 }: {
   playerCount: number;
   players?: PlayerSlot[];
+  mySeat?: number;
   chancellorSeat?: number;
   presidentSeat?: number;
 
@@ -775,6 +944,11 @@ export default function PlayerListView({
   aliveBySeat?: Record<number, boolean>;
   revealedRolesBySeat?: Record<number, { id: string; color?: string } | null> | null;
 
+  exiledSeats?: number[];
+  exileEnabled?: boolean;
+  eligibleExileSeats?: number[];
+  onExile?: (seat: number) => void;
+
   nominateEnabled?: boolean;
   onNominateChancellor?: (seat: number) => void;
 
@@ -788,6 +962,10 @@ export default function PlayerListView({
   specialElectionEnabled?: boolean;
   eligibleSpecialElectionSeats?: number[];
   onSpecialElection?: (seat: number) => void;
+
+  rolePickEnabled?: boolean;
+  eligibleRolePickSeats?: number[];
+  onRolePick?: (seat: number) => void;
 
   showSitButton?: boolean;
   onSit?: () => void;
@@ -827,6 +1005,14 @@ export default function PlayerListView({
     onSpecialElection?.(seat);
   };
 
+  const handleExile = (seat: number) => {
+    onExile?.(seat);
+  };
+
+  const handleRolePick = (seat: number) => {
+    onRolePick?.(seat);
+  };
+
   if (clamped === 7) {
     return (
       <div style={containerStyle}>
@@ -840,6 +1026,7 @@ export default function PlayerListView({
               roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
               revealedRoleName={revealedRolesBySeat?.[seat]?.id ?? null}
               isDead={aliveBySeat?.[seat] === false}
+              isExiled={exiledSeats?.includes(seat) === true}
               isChancellor={chancellorSeat === seat}
               isPresident={presidentSeat === seat}
               isChancellorTL={chancellorSeatTL === seat}
@@ -847,6 +1034,9 @@ export default function PlayerListView({
               electionPhase={electionPhase}
               electionVote={electionVotes?.[seat] ?? null}
               hasVoted={electionVoteCast?.[seat] === true}
+              exileEnabled={Boolean(exileEnabled && mySeat === seat)}
+              eligibleExileSeats={eligibleExileSeats}
+              onExile={handleExile}
               nominateEnabled={Boolean(nominateEnabled)}
               eligibleChancellorSeats={eligibleChancellorSeats}
               onNominate={handleNominate}
@@ -859,6 +1049,10 @@ export default function PlayerListView({
               specialElectionEnabled={Boolean(specialElectionEnabled)}
               eligibleSpecialElectionSeats={eligibleSpecialElectionSeats}
               onSpecialElection={handleSpecialElection}
+
+              rolePickEnabled={Boolean(rolePickEnabled)}
+              eligibleRolePickSeats={eligibleRolePickSeats}
+              onRolePick={handleRolePick}
             />
           );
         })}
@@ -878,6 +1072,7 @@ export default function PlayerListView({
             roleColor={visibleRoleColorsBySeat?.[seat] ?? null}
             revealedRoleName={revealedRolesBySeat?.[seat]?.id ?? null}
             isDead={aliveBySeat?.[seat] === false}
+            isExiled={exiledSeats?.includes(seat) === true}
             isChancellor={chancellorSeat === seat}
             isPresident={presidentSeat === seat}
             isChancellorTL={chancellorSeatTL === seat}
@@ -885,6 +1080,9 @@ export default function PlayerListView({
             electionPhase={electionPhase}
             electionVote={electionVotes?.[seat] ?? null}
             hasVoted={electionVoteCast?.[seat] === true}
+            exileEnabled={Boolean(exileEnabled && mySeat === seat)}
+            eligibleExileSeats={eligibleExileSeats}
+            onExile={handleExile}
             nominateEnabled={Boolean(nominateEnabled)}
             eligibleChancellorSeats={eligibleChancellorSeats}
             onNominate={handleNominate}
@@ -897,6 +1095,10 @@ export default function PlayerListView({
             specialElectionEnabled={Boolean(specialElectionEnabled)}
             eligibleSpecialElectionSeats={eligibleSpecialElectionSeats}
             onSpecialElection={handleSpecialElection}
+
+            rolePickEnabled={Boolean(rolePickEnabled)}
+            eligibleRolePickSeats={eligibleRolePickSeats}
+            onRolePick={handleRolePick}
           />
         );
       })}
