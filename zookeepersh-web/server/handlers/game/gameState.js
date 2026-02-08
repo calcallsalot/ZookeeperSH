@@ -8,6 +8,7 @@ const {
   clearAllClaimExileUses,
 } = require("../../game/exile");
 const { isExileRoleId } = require("../../game/roles");
+const { ensureClaimsState } = require("../../game/claims");
 
 function getInvestigationTeamFromRole(role) {
   if (!role || typeof role !== "object") return null;
@@ -226,6 +227,7 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
   ensureSecretState(gameState);
   ensureExileState(gameState);
   ensurePolicyDeckMeta(gameState);
+  ensureClaimsState(gameState);
 
   const phase = gameState.phase;
   const players = Array.isArray(gameState.players) ? gameState.players : [];
@@ -307,6 +309,33 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     exiledSeats.push(s);
   }
   exiledSeats.sort((a, b) => a - b);
+
+  const usedBySeat = {};
+  for (const [k, v] of Object.entries(gameState?.claims?.cards?.usedBySeat ?? {})) {
+    if (v !== true) continue;
+    const s = Number(k);
+    if (!Number.isFinite(s)) continue;
+    usedBySeat[s] = true;
+  }
+
+  const claims = {
+    cards: {
+      presidentSeat: Number.isFinite(Number(gameState?.claims?.cards?.presidentSeat))
+        ? Number(gameState.claims.cards.presidentSeat)
+        : null,
+      chancellorSeat: Number.isFinite(Number(gameState?.claims?.cards?.chancellorSeat))
+        ? Number(gameState.claims.cards.chancellorSeat)
+        : null,
+      usedBySeat,
+    },
+    inv2: {
+      presidentSeat: Number.isFinite(Number(gameState?.claims?.inv2?.presidentSeat))
+        ? Number(gameState.claims.inv2.presidentSeat)
+        : null,
+      ready: gameState?.claims?.inv2?.ready === true,
+      used: gameState?.claims?.inv2?.used === true,
+    },
+  };
 
   const isGameOver = phase === "game_over" || Boolean(gameState?.gameOver);
   const revealedRolesBySeat = isGameOver ? {} : null;
@@ -416,6 +445,7 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     legislative,
     visibleRoleColorsBySeat,
     exile: { exiledSeats },
+    claims,
     power: gameState.power ?? null,
     gameOver: gameState.gameOver ?? null,
     revealedRolesBySeat,

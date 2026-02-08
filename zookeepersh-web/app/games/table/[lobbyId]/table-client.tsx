@@ -276,6 +276,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               mySeat={mySeat}
               myElo={myElo}
               myAlive={myAlive}
+              claimCards={gameStarted ? gameState?.claims?.cards ?? null : null}
+              claimInv={gameStarted ? gameState?.claims?.inv2 ?? null : null}
               myRole={gameStarted ? gameState?.my?.role ?? null : null}
               myCoverRole={gameStarted ? gameState?.my?.coverRole ?? null : null}
               myClues={gameStarted ? gameState?.my?.clues ?? null : null}

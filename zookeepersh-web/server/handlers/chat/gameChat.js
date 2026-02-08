@@ -181,7 +181,7 @@ function registerGameChatHandlers({
 
           const whoLabel = isPres ? "President" : "Chancellor";
           const name = playerNameBySeat(gs, seat) ?? finalName;
-          await emitGameSystem(lobbyId, `${whoLabel} ${name} {${seat}} claims to have seen ${canonical}.`);
+          await emitGameSystem(lobbyId, `${whoLabel} ${name} {${seat}} claims ${canonical}`);
 
           gs.claims.cards.usedBySeat[seat] = true;
           return;
