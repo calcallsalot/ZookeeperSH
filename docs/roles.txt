@@ -4,7 +4,7 @@ The Bureaucrat starts the game knowing how many pairs of Fascists there are.
 The Inspector starts the game knowing that one of three specific players is a particular Agent.
 The Vicar starts the game knowing three players, where exactly one of them is a Fascist.
 The Surveyor, each time a third policy is enacted, publicly chooses two players and learns whether either of them is the Dictator. A Liberal registers as a Dictator to the Surveyor.
-The Nun, each time a policy other than a Liberal policy is enacted, exiles a player and learns how many of their living neighbors are Fascist.
+The Nun, each time this player enacts a fascist policy, they self-exile (involuntarily), they learn how many players (that are neighbors) are Fascist. 
 The Fisherman, once per game, may publicly choose a dead player and learns that player’s role.
 The Organizer, once per game, may publicly choose a player and learns whether that player is an Agent or is learning rumors.
 The Deputy, when exiling a player, publicly chooses three players and learns how many of them are Dissidents.

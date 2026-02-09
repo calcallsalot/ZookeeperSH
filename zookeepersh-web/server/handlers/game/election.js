@@ -43,7 +43,7 @@ function teamColor(team) {
   if (team === "fascist") return "#ff4d4d";
   return null;
 }
-const EXILE_ROLE_IDS = new Set(["Nun", "Deputy", "Journalist", "Monk"]);
+const EXILE_ROLE_IDS = new Set(["Deputy", "Journalist", "Monk"]);
 function isExileRoleId(id) {
   return EXILE_ROLE_IDS.has(id);
 }
