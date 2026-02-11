@@ -1,5 +1,5 @@
 const { createInitialPolicyDeck } = require("../../../app/gameLogic/policyDeck");
-const { buildPrivateRoleState } = require("../../../app/gameLogic/roles");
+const { buildPrivateRoleState, buildCoverRoleBySeat } = require("../../../app/gameLogic/roles");
 const { getRoleDescription } = require("../../game/roleDescriptions");
 const {
   ensureExileState,
@@ -84,6 +84,11 @@ function ensureSecretState(gs) {
     gs.secret = buildPrivateRoleState(seatCount);
   }
 
+  // Back-fill cover roles without re-rolling real roles.
+  if (!gs.secret.coverRoleBySeat && gs.secret.roleBySeat) {
+    gs.secret.coverRoleBySeat = buildCoverRoleBySeat({ roleBySeat: gs.secret.roleBySeat, seatCount });
+  }
+
   if (!gs.secret.lastInvestigationBySeat) gs.secret.lastInvestigationBySeat = {};
 
   // Per-investigator remembered info (used for UI coloring, etc.)
@@ -146,6 +151,7 @@ function ensureGameState(lobby) {
     ensureExileState(lobby.gameState);
     ensureSecretState(lobby.gameState);
     ensurePolicyDeckMeta(lobby.gameState);
+    ensureClaimsState(lobby.gameState);
     return;
   }
 
@@ -201,6 +207,7 @@ function ensureGameState(lobby) {
   ensureExileState(lobby.gameState);
   ensureSecretState(lobby.gameState);
   ensurePolicyDeckMeta(lobby.gameState);
+  ensureClaimsState(lobby.gameState);
 }
 
 function getSeatForSocketId(lobby, socketId, online) {
@@ -399,6 +406,9 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     const clues = gameState?.secret?.cluesBySeat?.[seat] ?? null;
     const lastInvestigation = publicizeInvestigation(gameState?.secret?.lastInvestigationBySeat?.[seat] ?? null);
 
+    const cover =
+      r?.alignment === "fascist" ? gameState?.secret?.coverRoleBySeat?.[seat] ?? null : null;
+
     const me = players.find((p) => p.seat === seat) ?? null;
     const iAmAlive = me?.alive !== false;
 
@@ -406,7 +416,8 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     const usedDeckNumber = Number(gameState?.exile?.claimExileUsedDeckBySeat?.[seat] ?? 0);
 
     const inOffice = seat === election.presidentSeat || seat === election.nominatedChancellorSeat;
-    const hasExilePower = isExileRoleId(r?.id);
+    const hasExilePower =
+      isExileRoleId(r?.id) || (r?.alignment === "fascist" && isExileRoleId(cover?.id));
 
     const canExile =
       iAmAlive &&
@@ -426,6 +437,15 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
             alignment: r.alignment,
             color: r.color,
             description: getRoleDescription(r.id),
+          }
+        : null,
+      coverRole: cover
+        ? {
+            id: cover.id,
+            group: cover.group,
+            alignment: cover.alignment,
+            color: cover.color,
+            description: getRoleDescription(cover.id),
           }
         : null,
       canExile: Boolean(canExile),

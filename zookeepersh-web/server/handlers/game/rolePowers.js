@@ -10,43 +10,18 @@ const { getDeputyInfo } = require("../../game/roles/liberals/loyalists/Deputy");
 const { getJournalistLiberalCount } = require("../../game/roles/liberals/loyalists/Journalist");
 const { getMonkInfo } = require("../../game/roles/liberals/loyalists/Monk");
 
-function getMyName(socket, online) {
-  const p = online.get(socket.id);
-  return p?.name ?? null;
-}
+const { getMySeat, isPlayerInLobby, getAliveSeats, isSeatAlive } = require("./guards");
 
-function getMySeat(lobby, socket, online) {
-  const name = getMyName(socket, online);
-  if (!name) return null;
-
-  const s = lobby.seatByName?.[name];
-  if (typeof s === "number") return s;
-
-  const idx = (lobby.players ?? []).indexOf(name);
-  return idx >= 0 ? idx + 1 : null;
-}
-
-function isPlayerInLobby(socketId, lobbyId, playerLobby) {
-  const info = playerLobby.get(socketId);
-  if (!info) return false;
-  if (info.lobbyId !== lobbyId) return false;
-  return info.role === "player";
-}
-
-function getAliveSeats(gameState) {
-  return (gameState?.players ?? []).filter((p) => p?.alive).map((p) => p.seat);
-}
-
-function isSeatAlive(gameState, seat) {
-  const s = Number(seat);
-  if (!Number.isFinite(s)) return false;
-  const p = (gameState?.players ?? []).find((x) => x?.seat === s);
-  return Boolean(p?.alive);
-}
-
-function getExilePowerRoleId({ role }) {
+function getExilePowerRoleId({ role, coverRole }) {
   const id = role?.id;
-  return isExileRoleId(id) ? String(id) : null;
+  if (isExileRoleId(id)) return String(id);
+
+  // Mirror other bluffable powers: fascists may gain a liberal power via their cover role.
+  if (role?.alignment === "fascist" && isExileRoleId(coverRole?.id)) {
+    return String(coverRole.id);
+  }
+
+  return null;
 }
 
 function buildExileFollowupRolePickPower({ kind, actorSeat, eligibleSeats, resumePhase }) {
@@ -107,7 +82,8 @@ function registerRolePowerHandlers({ io, socket, lobbies, online, playerLobby, e
     if (isSeatExiled(gs, target)) return;
 
     const myRole = gs.secret?.roleBySeat?.[mySeat] ?? null;
-    const exileRoleId = getExilePowerRoleId({ role: myRole });
+    const myCover = myRole?.alignment === "fascist" ? gs.secret?.coverRoleBySeat?.[mySeat] ?? null : null;
+    const exileRoleId = getExilePowerRoleId({ role: myRole, coverRole: myCover });
     if (!exileRoleId) return;
 
     const deckNumber = Number(gs?.policyDeckMeta?.deckNumber ?? 1);
