@@ -14,6 +14,7 @@ const { startGameIfReady } = require("../app/gameLogic/startGameIfReady");
 const { registerPresenceHandlers } = require("./handlers/presence");
 const { registerGameChatHandlers } = require("./handlers/chat/gameChat");
 const { registerElectionHandlers } = require("./handlers/game/election");
+const { registerRolePowerHandlers } = require("./handlers/game/rolePowers");
 const { registerInitHandlers } = require("./handlers/init");
 const { registerChatHandlers } = require("./handlers/chat");
 const { registerLobbyHandlers } = require("./handlers/lobby");
@@ -250,6 +251,15 @@ io.on("connection", (socket) => {
     gameRoom,
     emitGameSystem,
     closeLobby,
+  });
+
+  registerRolePowerHandlers({
+    io,
+    socket,
+    lobbies,
+    online,
+    playerLobby,
+    emitGameSystem,
   });
 
   registerGameChatHandlers({

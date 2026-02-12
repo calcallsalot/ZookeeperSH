@@ -111,6 +111,32 @@ function registerGameChatHandlers({
     // /claim commands are server-authoritative and are emitted as global system messages.
     // They do not appear as a normal user chat message.
     if (trimmed.split(/\s+/)[0]?.toLowerCase() === "/claim") {
+      const parts = trimmed.split(/\s+/);
+      const typeLower = String(parts[1] ?? "").toLowerCase();
+      const argRaw = parts.slice(2).join(" ").trim();
+      const argLower = argRaw.toLowerCase();
+
+      if (!typeLower) {
+        emitPrivateGameSystem(socket, lobbyId, "incorrect argument {missing type; try /claim help}");
+        return;
+      }
+
+      // /claim help
+      if (typeLower === "help") {
+        emitPrivateGameSystem(
+          socket,
+          lobbyId,
+          [
+            "Claim commands:",
+            "- /claim cards <RRR|RRB|RBB|BBB>  (President)",
+            "- /claim cards <RR|RB|BB>        (Chancellor)",
+            "- /claim inv <liberal|fascist>",
+            "- /claim role <role name>",
+          ].join("\n")
+        );
+        return;
+      }
+
       if (!emitGameSystem) {
         emitPrivateGameSystem(socket, lobbyId, "incorrect argument {claims unavailable}");
         return;
@@ -128,18 +154,8 @@ function registerGameChatHandlers({
       }
 
       ensureClaimsState(gs);
-
-      const parts = trimmed.split(/\s+/);
-      const typeLower = String(parts[1] ?? "").toLowerCase();
-      const argRaw = parts.slice(2).join(" ").trim();
-      const argLower = argRaw.toLowerCase();
-
-      if (!typeLower) {
-        emitPrivateGameSystem(socket, lobbyId, "incorrect argument {missing type}");
-        return;
-      }
       if (!argRaw) {
-        emitPrivateGameSystem(socket, lobbyId, "incorrect argument {missing argument}");
+        emitPrivateGameSystem(socket, lobbyId, "incorrect argument {missing argument; try /claim help}");
         return;
       }
 
@@ -181,7 +197,7 @@ function registerGameChatHandlers({
 
           const whoLabel = isPres ? "President" : "Chancellor";
           const name = playerNameBySeat(gs, seat) ?? finalName;
-          await emitGameSystem(lobbyId, `${whoLabel} ${name} {${seat}} claims to have seen ${canonical}.`);
+          await emitGameSystem(lobbyId, `${whoLabel} ${name} {${seat}} claims ${canonical}`);
 
           gs.claims.cards.usedBySeat[seat] = true;
           return;
@@ -243,7 +259,7 @@ function registerGameChatHandlers({
           return;
         }
 
-        emitPrivateGameSystem(socket, lobbyId, "incorrect argument {unknown type}");
+        emitPrivateGameSystem(socket, lobbyId, "incorrect argument {unknown type; try /claim help}");
         return;
       } catch (e) {
         console.error("[claim] error:", e);

@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLobby } from "../../../frontend-scripts/components/lobby/LobbySocketContext";
+import ClaimCardsModal, { type ClaimCardsModalMode } from "../../../frontend-scripts/game/ClaimCardsModal";
+import ClaimInvestigationResultModal, {
+  type InvestigationResultClaim,
+} from "../../../frontend-scripts/game/ClaimInvestigationResultModal";
 
 function nameColorFromElo(elo?: number | null) {
   if (elo == null) return "rgba(255,255,255,0.9)";
@@ -10,7 +14,53 @@ function nameColorFromElo(elo?: number | null) {
   return "rgba(255,255,255,0.9)";
 }
 
+const CLAIM_GOLD = "rgb(251, 189, 8)";
+const CLAIM_WHITE = "rgb(255,255,255)";
+const CLAIM_FASCIST_RED = "#f2654c";
+const CLAIM_LIBERAL_BLUE = "#4da3ff";
+
+function formatClaimCardsSystemText(text: string): ReactNode | null {
+  const t = String(text ?? "").trim();
+  if (!t) return null;
+
+  // Supports legacy server text that included "to have seen".
+  const m = t.match(
+    /^(President|Chancellor)\s+(.+?)\s+\{(\d+)\}\s+claims(?:\s+to have seen)?\s+([RB]{2,3})\.?\s*$/i
+  );
+  if (!m) return null;
+
+  const roleRaw = String(m[1] ?? "");
+  const role = roleRaw ? roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1).toLowerCase() : "";
+  const name = String(m[2] ?? "").trim();
+  const seat = String(m[3] ?? "").trim();
+  const cards = String(m[4] ?? "").trim().toUpperCase();
+  if (!role || !name || !seat || !cards) return null;
+
+  return (
+    <span>
+      <span style={{ color: CLAIM_GOLD, fontWeight: 900 }}>{role}</span>{" "}
+      <span style={{ color: CLAIM_WHITE, fontWeight: 900 }}>{name}</span>{" "}
+      <span style={{ color: CLAIM_WHITE, fontWeight: 900 }}>{`{${seat}}`}</span>{" "}
+      <span style={{ color: CLAIM_GOLD, fontWeight: 900 }}>claims</span>{" "}
+      {cards.split("").map((ch, idx) => (
+        <span
+          key={`claim-card-${idx}`}
+          style={{
+            color: ch === "R" ? CLAIM_FASCIST_RED : CLAIM_LIBERAL_BLUE,
+            fontWeight: 900,
+          }}
+        >
+          {ch}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function formatSystemText(text: string): ReactNode {
+  const claimCards = formatClaimCardsSystemText(text);
+  if (claimCards) return claimCards;
+
   const parts = text.split(/(fascist policy|liberal policy|\d+\s+liberal|\d+\s+fascist|fascist|liberal)/gi);
   return parts.map((part, idx) => {
     const p = part.toLowerCase();
@@ -66,6 +116,8 @@ export default function GameChatBar({
   mySeat,
   myElo,
   myAlive,
+  claimCards,
+  claimInv,
   myRole,
   myCoverRole,
   myClues,
@@ -76,6 +128,20 @@ export default function GameChatBar({
   mySeat?: number | null;
   myElo?: number | null;
   myAlive?: boolean;
+  claimCards?:
+    | {
+        presidentSeat?: number | null;
+        chancellorSeat?: number | null;
+        usedBySeat?: Record<number, boolean> | Record<string, boolean>;
+      }
+    | null;
+  claimInv?:
+    | {
+        presidentSeat?: number | null;
+        ready?: boolean;
+        used?: boolean;
+      }
+    | null;
   myRole?: { id: string; color?: string; description?: string | null } | null;
   myCoverRole?: { id: string; color?: string; description?: string | null } | null;
   myClues?: { bureaucratFascistPairs?: number | null } | null;
@@ -101,6 +167,57 @@ export default function GameChatBar({
 
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  const [claimCardsOpen, setClaimCardsOpen] = useState(false);
+  const [claimCardsMode, setClaimCardsMode] = useState<ClaimCardsModalMode>("president");
+  const [claimedCardsGovKey, setClaimedCardsGovKey] = useState<string | null>(null);
+
+  const [claimInvOpen, setClaimInvOpen] = useState(false);
+  const [claimedInvKey, setClaimedInvKey] = useState<string | null>(null);
+  const [localNotices, setLocalNotices] = useState<any[]>([]);
+
+  const claimGovKey = useMemo(() => {
+    const pres = claimCards?.presidentSeat;
+    const chan = claimCards?.chancellorSeat;
+    if (typeof pres !== "number" || typeof chan !== "number") return null;
+    return `${pres}:${chan}`;
+  }, [claimCards?.chancellorSeat, claimCards?.presidentSeat]);
+
+  const invKey = useMemo(() => {
+    const pres = claimInv?.presidentSeat;
+    if (typeof pres !== "number") return null;
+    const ready = claimInv?.ready === true ? "1" : "0";
+    return `${pres}:${ready}`;
+  }, [claimInv?.presidentSeat, claimInv?.ready]);
+
+  useEffect(() => {
+    setClaimedCardsGovKey(null);
+  }, [claimGovKey]);
+
+  useEffect(() => {
+    setClaimedInvKey(null);
+  }, [invKey]);
+
+  useEffect(() => {
+    setLocalNotices([]);
+  }, [lobbyId]);
+
+  const pushNotice = (noticeText: string) => {
+    const ts = Date.now();
+    setLocalNotices((prev) => {
+      const next = [
+        ...prev,
+        {
+          id: `local:notice:${lobbyId}:${ts}:${Math.random().toString(36).slice(2)}`,
+          lobbyId,
+          kind: "system",
+          text: String(noticeText ?? ""),
+          ts,
+        },
+      ];
+      return next.length > 30 ? next.slice(-30) : next;
+    });
+  };
 
   useEffect(() => {
     if(!connected) return;
@@ -209,20 +326,75 @@ export default function GameChatBar({
   }, [gameStarted, lobbyId, myClues, myCoverRole, myLastInvestigation, myRole, mySeat]);
 
   const viewMessages = useMemo(() => {
-    const combined = [...localSystem, ...sorted];
+    const combined = [...localSystem, ...localNotices, ...sorted];
     combined.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
     return combined;
-  }, [localSystem, sorted]);
+  }, [localNotices, localSystem, sorted]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [viewMessages.length]);
 
-  const disabled = !connected || !canChat || myAlive === false;
+  const disabled = !connected || !canChat || myAlive === false || claimCardsOpen || claimInvOpen;
 
   const onSend = () => {
     const msg = text.trim();
     if (!msg) return;
+
+    const parts = msg.split(/\s+/);
+    const cmd = String(parts[0] ?? "").toLowerCase();
+    const type = String(parts[1] ?? "").toLowerCase();
+    const rest = parts.slice(2).join(" ").trim();
+
+    // UI helper: typing `/claim cards` opens a picker for the last government.
+    if (cmd === "/claim" && type === "cards" && rest.length === 0) {
+      const presSeat = claimCards?.presidentSeat ?? null;
+      const chanSeat = claimCards?.chancellorSeat ?? null;
+      const isPres = mySeat != null && presSeat != null && mySeat === presSeat;
+      const isChan = mySeat != null && chanSeat != null && mySeat === chanSeat;
+
+      if (isPres || isChan) {
+        const usedBySeat = (claimCards as any)?.usedBySeat ?? null;
+        const alreadyClaimedServer = mySeat != null && usedBySeat?.[mySeat] === true;
+        const alreadyClaimedLocal = claimGovKey != null && claimedCardsGovKey === claimGovKey;
+        if (alreadyClaimedServer || alreadyClaimedLocal) {
+          pushNotice("You already claimed cards for this government.");
+          setText("");
+          return;
+        }
+
+        setClaimCardsMode(isPres ? "president" : "chancellor");
+        setClaimCardsOpen(true);
+        setText("");
+        return;
+      }
+    }
+
+    // UI helper: typing `/claim inv` opens a picker for fascist/liberal.
+    if (
+      cmd === "/claim" &&
+      (type === "inv" || type === "investigation" || type === "investigation_result") &&
+      rest.length === 0
+    ) {
+      const presSeat = claimInv?.presidentSeat ?? null;
+      const isPres = mySeat != null && presSeat != null && mySeat === presSeat;
+      const isReady = claimInv?.ready === true;
+
+      if (isPres && isReady) {
+        const alreadyUsedServer = claimInv?.used === true;
+        const alreadyUsedLocal = invKey != null && claimedInvKey === invKey;
+        if (alreadyUsedServer || alreadyUsedLocal) {
+          pushNotice("You already claimed investigation for this window.");
+          setText("");
+          return;
+        }
+
+        setClaimInvOpen(true);
+        setText("");
+        return;
+      }
+    }
+
     sendGameChat?.(lobbyId, msg); // mySeat ?? null, myElo ?? null);
     setText("");
   };
@@ -344,6 +516,29 @@ export default function GameChatBar({
           Chat
         </button>
       </div>
+
+      <ClaimCardsModal
+        open={claimCardsOpen}
+        mode={claimCardsMode}
+        onClose={() => setClaimCardsOpen(false)}
+        onSubmit={(cards) => {
+          if (claimGovKey) setClaimedCardsGovKey(claimGovKey);
+          sendGameChat?.(lobbyId, `/claim cards ${cards}`);
+          setClaimCardsOpen(false);
+          setText("");
+        }}
+      />
+
+      <ClaimInvestigationResultModal
+        open={claimInvOpen}
+        onClose={() => setClaimInvOpen(false)}
+        onSubmit={(result: InvestigationResultClaim) => {
+          if (invKey) setClaimedInvKey(invKey);
+          sendGameChat?.(lobbyId, `/claim inv ${result}`);
+          setClaimInvOpen(false);
+          setText("");
+        }}
+      />
     </section>
   );
 }
