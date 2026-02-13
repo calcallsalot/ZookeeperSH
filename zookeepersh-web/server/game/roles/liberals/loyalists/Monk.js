@@ -1,4 +1,4 @@
-// The Monk, when exiling a player, publicly chooses two players other than themselves and learns
+// The Monk, when exiling themselves, publicly chooses two players other than themselves and learns
 // whether those two players share the same alignment.
 
 function getAlignmentForMonk(role) {

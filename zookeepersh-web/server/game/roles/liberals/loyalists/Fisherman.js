@@ -1,5 +1,7 @@
 // The Fisherman, once per game, may publicly choose a dead player and learns that player's role.
 
+const { getRoleIdForRoleReveal } = require("../../fascist/agents/Grandma");
+
 // Used for rumorized info when a player is learning rumors.
 // Keep in sync with app/gameLogic/roles.js ROLE_GROUPS.
 const ROLE_ID_POOL = [
@@ -118,7 +120,8 @@ function useFishermanReveal({ gs, actorSeat, targetSeat, now, writeLastInvestiga
   ensureFishermanState(gs);
   gs.secret.fisherman.usedBySeat[actor] = true;
 
-  const truthRoleIdRaw = gs.secret?.roleBySeat?.[target]?.id ?? null;
+  const targetRole = gs.secret?.roleBySeat?.[target] ?? null;
+  const truthRoleIdRaw = getRoleIdForRoleReveal(targetRole);
   const truthRoleId = truthRoleIdRaw != null ? String(truthRoleIdRaw) : null;
 
   const learningRumors = gs.secret?.learningRumorsBySeat?.[actor] === true;

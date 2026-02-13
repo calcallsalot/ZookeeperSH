@@ -36,6 +36,11 @@ function playerBySeat(gs, seat) {
   return players.find((p) => p?.seat === s) ?? null;
 }
 
+function isSeatAlive(gs, seat) {
+  const p = playerBySeat(gs, seat);
+  return p?.alive !== false;
+}
+
 function getDeckNumberFromGameState(gs, deckNumberOverride) {
   const raw = deckNumberOverride ?? gs?.policyDeckMeta?.deckNumber;
   const n = Number(raw ?? 1);
@@ -151,6 +156,42 @@ function clearInsurrectionaryRumorsOnReshuffle({ gs }) {
   gs.secret.insurrectionary.forcedRumorsBySeat = {};
 }
 
+function needsInsurrectionaryPickForCurrentDeck({ gs, insurrectionarySeat }) {
+  if (!gs || typeof gs !== "object") return false;
+  if (!gs.secret || typeof gs.secret !== "object") return false;
+
+  const seat = Number(insurrectionarySeat);
+  if (!Number.isFinite(seat) || seat <= 0) return false;
+  if (!isSeatAlive(gs, seat)) return false;
+
+  if (!isInsurrectionaryRole(gs.secret?.roleBySeat?.[seat] ?? null)) return false;
+
+  ensureInsurrectionaryState(gs);
+  const deck = getDeckNumberFromGameState(gs);
+  const lastUsed = Number(gs.secret?.insurrectionary?.lastUsedDeckBySeat?.[seat] ?? 0);
+  return !(Number.isFinite(lastUsed) && lastUsed === deck);
+}
+
+function buildInsurrectionaryDeckPickPower({ actorSeat, eligibleSeats, resumePhase }) {
+  const s = Number(actorSeat);
+  if (!Number.isFinite(s)) return null;
+
+  const seats = Array.isArray(eligibleSeats)
+    ? eligibleSeats.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
+    : [];
+  seats.sort((a, b) => a - b);
+
+  return {
+    type: "role_pick",
+    kind: "insurrectionary",
+    actorSeat: s,
+    pickCount: 1,
+    pickedSeats: [],
+    eligibleSeats: seats,
+    resumePhase: typeof resumePhase === "string" && resumePhase ? resumePhase : "election_nomination",
+  };
+}
+
 module.exports = {
   isInsurrectionaryRole,
   inferSeatCount,
@@ -159,4 +200,6 @@ module.exports = {
   canUseInsurrectionaryPick,
   useInsurrectionaryPick,
   clearInsurrectionaryRumorsOnReshuffle,
+  needsInsurrectionaryPickForCurrentDeck,
+  buildInsurrectionaryDeckPickPower,
 };

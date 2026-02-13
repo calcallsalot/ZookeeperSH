@@ -1,4 +1,5 @@
 const { ensureClaimsState } = require("../../game/claims");
+const { ensurePolicyDeckMeta } = require("../game/gameState");
 
 function emitPrivateGameSystem(socket, lobbyId, text) {
   const ts = Date.now();
@@ -256,6 +257,25 @@ function registerGameChatHandlers({
           }
           const name = playerNameBySeat(gs, seat) ?? finalName;
           await emitGameSystem(lobbyId, `${name} {${seat}} claims role ${role}.`);
+
+          // Record last role-claim (used by some role powers).
+          try {
+            ensurePolicyDeckMeta(gs);
+            const deckNumberRaw = gs?.policyDeckMeta?.deckNumber;
+            const deckNumber = Number(deckNumberRaw);
+            if (gs?.claims?.role?.lastBySeat && typeof gs.claims.role.lastBySeat === "object") {
+              gs.claims.role.lastBySeat[seat] = role;
+            }
+            if (gs?.claims?.role?.lastTsBySeat && typeof gs.claims.role.lastTsBySeat === "object") {
+              gs.claims.role.lastTsBySeat[seat] = Date.now();
+            }
+            if (gs?.claims?.role?.lastDeckBySeat && typeof gs.claims.role.lastDeckBySeat === "object") {
+              if (Number.isFinite(deckNumber) && deckNumber > 0) gs.claims.role.lastDeckBySeat[seat] = deckNumber;
+              else delete gs.claims.role.lastDeckBySeat[seat];
+            }
+          } catch (_) {
+            // Best-effort only.
+          }
           return;
         }
 

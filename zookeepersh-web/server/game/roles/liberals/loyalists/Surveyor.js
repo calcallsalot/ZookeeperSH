@@ -187,6 +187,16 @@ function ensureSurveyorState(gs) {
   }
 }
 
+function markSurveyorTriggered({ gs, enactedPolicies }) {
+  if (!gs || typeof gs !== "object") return { ok: false, reason: "invalid_game_state" };
+  if (!gs.secret || typeof gs.secret !== "object") return { ok: false, reason: "secret_state_missing" };
+
+  ensureSurveyorState(gs);
+  const total = getTotalEnactedPolicies(enactedPolicies ?? gs.enactedPolicies);
+  gs.secret.surveyor.lastTriggeredPolicyCount = total;
+  return { ok: true, reason: null, totalEnactedPolicies: total };
+}
+
 function findSurveyorSeat({ roleBySeat, seatCount }) {
   const nRaw = Number(seatCount);
   const n = Number.isFinite(nRaw) && nRaw > 0 ? Math.trunc(nRaw) : inferSeatCount(roleBySeat);
@@ -214,5 +224,6 @@ module.exports = {
   resolveSurveyorPick,
   buildSurveyorPower,
   ensureSurveyorState,
+  markSurveyorTriggered,
   findSurveyorSeat,
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BoardView from "../../../frontend-scripts/Board/BoardView";
 import PlayerListView from "../../../frontend-scripts/Board/playerListView";
 import { useLobby } from "../../../frontend-scripts/components/lobby/LobbySocketContext";
@@ -35,6 +35,12 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
   const myElo = null; // TODO
 
+  const [powerMode, setPowerMode] = useState(false);
+
+  useEffect(() => {
+    setPowerMode(false);
+  }, [lobbyId]);
+
   const playersForView = lobbyPlayerNames.map((name) => ({ name }));
 
   // Ensure this socket is actually registered in this lobby server-side.
@@ -53,6 +59,9 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
 
   // gameState is assumed to be attached to lobby by your socket handler
   const gameState: any = gameStarted ? (lobby as any)?.gameState ?? null : null;
+
+  const myRoleId = gameStarted ? (gameState?.my?.role?.id ?? null) : null;
+  const myCoverRoleId = gameStarted ? (gameState?.my?.coverRole?.id ?? null) : null;
 
   const aliveBySeat = useMemo(() => {
     const out: Record<number, boolean> = {};
@@ -117,8 +126,24 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
     }
 
     out.sort((a, b) => a - b);
+
+    // Exile is self-exile; only show an Exile button on your own seat.
+    if (typeof mySeat === "number") {
+      return out.includes(mySeat) ? [mySeat] : [];
+    }
+
     return out;
-  }, [exileEnabled, exiledSeats, gameState?.election?.nominatedChancellorSeat, gameState?.election?.presidentSeat, gameState?.players]);
+  }, [exileEnabled, exiledSeats, gameState?.election?.nominatedChancellorSeat, gameState?.election?.presidentSeat, gameState?.players, mySeat]);
+
+  const fishermanEnabled = Boolean(gameStarted && myAlive && mySeat != null && gameState?.my?.canFishermanPick === true);
+
+  const organizerEnabled = Boolean(gameStarted && myAlive && mySeat != null && gameState?.my?.canOrganizerPick === true);
+
+  const usherEnabled = Boolean(gameStarted && myAlive && mySeat != null && gameState?.my?.canUsherPick === true);
+  const insurrectionaryEnabled = Boolean(
+    gameStarted && myAlive && mySeat != null && gameState?.my?.canInsurrectionaryPick === true
+  );
+  const nobleEnabled = Boolean(gameStarted && myAlive && mySeat != null && gameState?.my?.canNoblePick === true);
 
   return (
     <div
@@ -187,6 +212,32 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
                 onExile={(seat) => {
                   socket?.emit?.("game:role:exile", { lobbyId, targetSeat: seat });
                 }}
+
+                fishermanEnabled={fishermanEnabled}
+                onFisherman={(seat) => {
+                  socket?.emit?.("game:power:fisherman", { lobbyId, targetSeat: seat });
+                }}
+
+                organizerEnabled={organizerEnabled}
+                onOrganizer={(seat) => {
+                  socket?.emit?.("game:power:organizer", { lobbyId, targetSeat: seat });
+                }}
+
+                usherEnabled={usherEnabled}
+                onUsher={(seat) => {
+                  socket?.emit?.("game:power:usher", { lobbyId, targetSeat: seat });
+                }}
+
+                insurrectionaryEnabled={insurrectionaryEnabled}
+                onInsurrectionary={(seat) => {
+                  socket?.emit?.("game:power:insurrectionary", { lobbyId, targetSeat: seat });
+                }}
+
+                nobleEnabled={nobleEnabled}
+                onNoble={(seat) => {
+                  socket?.emit?.("game:power:noble", { lobbyId, targetSeat: seat });
+                }}
+                powerMode={powerMode}
                 rolePickEnabled={
                   Boolean(
                     gameStarted &&
@@ -282,6 +333,8 @@ export default function TableClient({ lobbyId }: { lobbyId: string }) {
               myCoverRole={gameStarted ? gameState?.my?.coverRole ?? null : null}
               myClues={gameStarted ? gameState?.my?.clues ?? null : null}
               myLastInvestigation={gameStarted ? gameState?.my?.lastInvestigation ?? null : null}
+              powerMode={powerMode}
+              onTogglePowerMode={() => setPowerMode((prev) => !prev)}
             />
           </div>
         </aside>

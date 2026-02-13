@@ -1,5 +1,11 @@
 const { createInitialPolicyDeck } = require("../../../app/gameLogic/policyDeck");
-const { buildPrivateRoleState, buildCoverRoleBySeat } = require("../../../app/gameLogic/roles");
+const {
+  buildPrivateRoleState,
+  buildCoverRoleBySeat,
+  buildRumoristBelievedRoleIdBySeat,
+  buildRole,
+  groupForRoleId,
+} = require("../../../app/gameLogic/roles");
 const { getRoleDescription } = require("../../game/roleDescriptions");
 const {
   ensureExileState,
@@ -9,6 +15,10 @@ const {
 } = require("../../game/exile");
 const { isExileRoleId } = require("../../game/roles");
 const { ensureClaimsState } = require("../../game/claims");
+
+const { needsUsherPickForCurrentDeck } = require("../../game/roles/liberals/dissidents/Usher");
+const { needsInsurrectionaryPickForCurrentDeck } = require("../../game/roles/fascist/agents/Insurrectionary");
+const { needsNoblePickForCurrentDeck } = require("../../game/roles/fascist/agents/Noble");
 
 function getInvestigationTeamFromRole(role) {
   if (!role || typeof role !== "object") return null;
@@ -87,6 +97,14 @@ function ensureSecretState(gs) {
   // Back-fill cover roles without re-rolling real roles.
   if (!gs.secret.coverRoleBySeat && gs.secret.roleBySeat) {
     gs.secret.coverRoleBySeat = buildCoverRoleBySeat({ roleBySeat: gs.secret.roleBySeat, seatCount });
+  }
+
+  if (!gs.secret.rumoristBelievedRoleIdBySeat && gs.secret.roleBySeat) {
+    gs.secret.rumoristBelievedRoleIdBySeat = buildRumoristBelievedRoleIdBySeat({
+      roleBySeat: gs.secret.roleBySeat,
+      coverRoleBySeat: gs.secret.coverRoleBySeat,
+      seatCount,
+    });
   }
 
   if (!gs.secret.lastInvestigationBySeat) gs.secret.lastInvestigationBySeat = {};
@@ -367,7 +385,19 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
   let my = null;
   if (role === "player" && seat != null) {
     const r = gameState?.secret?.roleBySeat?.[seat] ?? null;
-    if (!isGameOver && r?.color) visibleRoleColorsBySeat[seat] = r.color;
+
+    // Rumorist believes they are a Loyalist role (private to the Rumorist player).
+    let displayRole = r;
+    if (!isGameOver && r?.id === "Rumorist") {
+      const believedRaw = gameState?.secret?.rumoristBelievedRoleIdBySeat?.[seat] ?? null;
+      const believed = typeof believedRaw === "string" && believedRaw.trim() ? believedRaw.trim() : null;
+      if (believed) {
+        const g = groupForRoleId(believed) ?? "loyalist";
+        displayRole = buildRole(believed, g);
+      }
+    }
+
+    if (!isGameOver && displayRole?.color) visibleRoleColorsBySeat[seat] = displayRole.color;
 
     if (!isGameOver) {
       // Agents can see co-fascists and the Dictator in the player list.
@@ -416,8 +446,11 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
     const usedDeckNumber = Number(gameState?.exile?.claimExileUsedDeckBySeat?.[seat] ?? 0);
 
     const inOffice = seat === election.presidentSeat || seat === election.nominatedChancellorSeat;
+
+    // Rumorist uses the believed role's powers.
+    const exileRoleIdForSeat = displayRole?.id ?? r?.id;
     const hasExilePower =
-      isExileRoleId(r?.id) || (r?.alignment === "fascist" && isExileRoleId(cover?.id));
+      isExileRoleId(exileRoleIdForSeat) || (r?.alignment === "fascist" && isExileRoleId(cover?.id));
 
     const canExile =
       iAmAlive &&
@@ -428,15 +461,30 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
       Number.isFinite(deckNumber) &&
       usedDeckNumber !== deckNumber;
 
+    // Deck-scoped optional powers (can be used in any non-game_over phase).
+    const canUsherPick = !isGameOver && iAmAlive && needsUsherPickForCurrentDeck({ gs: gameState, usherSeat: seat });
+    const canInsurrectionaryPick =
+      !isGameOver && iAmAlive && needsInsurrectionaryPickForCurrentDeck({ gs: gameState, insurrectionarySeat: seat });
+    const canNoblePick = !isGameOver && iAmAlive && needsNoblePickForCurrentDeck({ gs: gameState, nobleSeat: seat });
+
+    const fishermanUsed = gameState?.secret?.fisherman?.usedBySeat?.[seat] === true;
+    const hasFishermanPower =
+      exileRoleIdForSeat === "Fisherman" || (r?.alignment === "fascist" && cover?.id === "Fisherman");
+    const canFishermanPick = !isGameOver && iAmAlive && hasFishermanPower && !fishermanUsed;
+
+    const organizerUsed = gameState?.secret?.organizer?.usedBySeat?.[seat] === true;
+    const hasOrganizerPower = exileRoleIdForSeat === "Organizer" || (r?.alignment === "fascist" && cover?.id === "Organizer");
+    const canOrganizerPick = !isGameOver && iAmAlive && hasOrganizerPower && !organizerUsed;
+
     my = {
       seat,
-      role: r
+      role: displayRole
         ? {
-            id: r.id,
-            group: r.group,
-            alignment: r.alignment,
-            color: r.color,
-            description: getRoleDescription(r.id),
+            id: displayRole.id,
+            group: displayRole.group,
+            alignment: displayRole.alignment,
+            color: displayRole.color,
+            description: getRoleDescription(displayRole.id),
           }
         : null,
       coverRole: cover
@@ -450,6 +498,11 @@ function sanitizeGameStateForRecipient(gameState, seat, role) {
         : null,
       canExile: Boolean(canExile),
       canClaimExile: Boolean(canExile),
+      canUsherPick: Boolean(canUsherPick),
+      canInsurrectionaryPick: Boolean(canInsurrectionaryPick),
+      canNoblePick: Boolean(canNoblePick),
+      canFishermanPick: Boolean(canFishermanPick),
+      canOrganizerPick: Boolean(canOrganizerPick),
       clues,
       lastInvestigation,
     };

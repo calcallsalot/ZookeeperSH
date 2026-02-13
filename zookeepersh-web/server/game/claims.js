@@ -25,6 +25,25 @@ function ensureClaimsState(gs) {
       used: false,
     };
   }
+
+  // Public /claim role <role> messages (used by certain role powers).
+  if (!gs.claims.role || typeof gs.claims.role !== "object") {
+    gs.claims.role = {
+      lastBySeat: {},
+      lastDeckBySeat: {},
+      lastTsBySeat: {},
+    };
+  }
+
+  if (!gs.claims.role.lastBySeat || typeof gs.claims.role.lastBySeat !== "object") {
+    gs.claims.role.lastBySeat = {};
+  }
+  if (!gs.claims.role.lastDeckBySeat || typeof gs.claims.role.lastDeckBySeat !== "object") {
+    gs.claims.role.lastDeckBySeat = {};
+  }
+  if (!gs.claims.role.lastTsBySeat || typeof gs.claims.role.lastTsBySeat !== "object") {
+    gs.claims.role.lastTsBySeat = {};
+  }
 }
 
 function setCardsClaimGovernment(gs, presidentSeat, chancellorSeat) {

@@ -9,6 +9,19 @@ const { checkPolicyWin, endGame, scheduleCloseLobby } = require("./winConditions
 const { nextPresidentSeatAfterRound } = require("./presidency");
 const { maybeStartFascistBoardPower } = require("./defaultPowers");
 
+const { applyNunSelfExileOnEnact } = require("../../../game/roles/liberals/loyalists/Nun");
+const {
+  ensureSurveyorState,
+  shouldTriggerSurveyorOnEnact,
+  getTotalEnactedPolicies,
+  findSurveyorSeat,
+  buildSurveyorPower,
+} = require("../../../game/roles/liberals/loyalists/Surveyor");
+
+const {
+  getGovernorWinIfChancellorCannotBeNominated,
+} = require("../../../game/roles/liberals/loyalists/Governor");
+
 function registerLegislativeHandlers({ io, socket, lobbies, online, playerLobby, emitGameSystem, closeLobby }) {
   socket.on("game:legislative:presidentDiscard", ({ lobbyId, discardIndex } = {}) => {
     if (typeof lobbyId !== "string") return;
@@ -92,6 +105,16 @@ function registerLegislativeHandlers({ io, socket, lobbies, online, playerLobby,
       }
     }
 
+    // Nun: self-exile + private neighbor info when enacting a fascist policy.
+    if (enacted === "fascist") {
+      const nunRes = applyNunSelfExileOnEnact({ gs, actorSeat: mySeat, enactedPolicy: enacted, now: Date.now() });
+      if (nunRes?.ok && nunRes?.triggered) {
+        if (emitGameSystem) {
+          emitGameSystem(lobbyId, `Seat ${mySeat} self-exiles.`).catch(() => {});
+        }
+      }
+    }
+
     const win = checkPolicyWin(gs.enactedPolicies);
     if (win) {
       const didEnd = endGame(gs, win.winner, win.reason);
@@ -102,6 +125,27 @@ function registerLegislativeHandlers({ io, socket, lobbies, online, playerLobby,
       emitGameState({ io, lobbyId, lobby, playerLobby, online });
       return;
     }
+
+    // Surveyor: every 3rd enacted policy queues/starts a mandatory public 2-seat pick.
+    ensureSurveyorState(gs);
+    const lastTrig = Number(gs.secret?.surveyor?.lastTriggeredPolicyCount ?? 0);
+    const surveyorShould = shouldTriggerSurveyorOnEnact({
+      enactedPolicies: gs.enactedPolicies,
+      lastTriggeredPolicyCount: lastTrig,
+    });
+
+    const seatCount = Array.isArray(gs.players) ? gs.players.length : 0;
+    const roleBySeat = gs.secret?.roleBySeat ?? null;
+    const totalPolicies = surveyorShould ? getTotalEnactedPolicies(gs.enactedPolicies) : 0;
+    if (surveyorShould) {
+      // Mark the trigger as consumed even if the Surveyor is dead/missing.
+      gs.secret.surveyor.lastTriggeredPolicyCount = totalPolicies;
+    }
+
+    const surveyorSeat = surveyorShould ? findSurveyorSeat({ roleBySeat, seatCount }) : null;
+    const aliveSeatsNow = getAliveSeats(gs);
+    const surveyorAlive = surveyorSeat != null && aliveSeatsNow.includes(surveyorSeat);
+    const surveyorTrigger = Boolean(surveyorShould && surveyorAlive);
 
     // Claims: the most recently enacted government can claim cards (once each).
     setCardsClaimGovernment(gs, gs.election.presidentSeat, gs.election.nominatedChancellorSeat);
@@ -128,6 +172,10 @@ function registerLegislativeHandlers({ io, socket, lobbies, online, playerLobby,
       lobbyId,
     });
     if (powerRes.started) {
+      if (surveyorTrigger) {
+        // Defer Surveyor until after the phase-locked board power resolves.
+        gs.secret.surveyor.pendingPolicyCount = totalPolicies;
+      }
       if (emitGameSystem && powerRes.systemText) {
         emitGameSystem(lobbyId, powerRes.systemText).catch(() => {});
       }
@@ -143,6 +191,36 @@ function registerLegislativeHandlers({ io, socket, lobbies, online, playerLobby,
     gs.phase = "election_nomination";
     gs.election.presidentSeat = nextPres;
     gs.election.nominatedChancellorSeat = null;
+
+    const govWin = getGovernorWinIfChancellorCannotBeNominated(gs);
+    if (govWin) {
+      const didEnd = endGame(gs, govWin.winner, govWin.reason);
+      if (didEnd) scheduleCloseLobby(gs, closeLobby, lobbyId);
+      if (emitGameSystem) {
+        emitGameSystem(lobbyId, `Game over. ${govWin.winner === "liberal" ? "Liberals" : "Fascists"} win!`).catch(
+          () => {}
+        );
+      }
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    if (surveyorTrigger) {
+      const p = buildSurveyorPower({
+        actorSeat: surveyorSeat,
+        eligibleSeats: getAliveSeats(gs),
+        resumePhase: "election_nomination",
+      });
+      if (p) {
+        gs.phase = "power_role_pick";
+        gs.power = p;
+        if (emitGameSystem) {
+          emitGameSystem(lobbyId, `Seat ${surveyorSeat} must choose 2 players.`).catch(() => {});
+        }
+        emitGameState({ io, lobbyId, lobby, playerLobby, online });
+        return;
+      }
+    }
 
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });

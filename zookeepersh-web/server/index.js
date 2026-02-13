@@ -260,6 +260,7 @@ io.on("connection", (socket) => {
     online,
     playerLobby,
     emitGameSystem,
+    closeLobby,
   });
 
   registerGameChatHandlers({
