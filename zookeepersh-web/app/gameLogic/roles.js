@@ -4,6 +4,18 @@ const {
   getStartingFascistPairs: getBureaucratStartingFascistPairs,
 } = require("../../server/game/roles/liberals/loyalists/Bureaucrat");
 
+const {
+  getStartingAgentClue: getInspectorStartingAgentClue,
+} = require("../../server/game/roles/liberals/loyalists/Inspector");
+
+const {
+  getStartingFascistClue: getVicarStartingFascistClue,
+} = require("../../server/game/roles/liberals/loyalists/Vicar");
+
+const {
+  buildRumoristBelievedRoleIdBySeat: buildRumoristBelievedRoleIdBySeatFromRumoristModule,
+} = require("../../server/game/roles/liberals/dissidents/Rumorist");
+
 // Role groups (docs/roles.txt)
 const ROLE_GROUPS = {
   loyalist: [
@@ -71,7 +83,8 @@ function buildCoverRoleBySeat({ roleBySeat, seatCount }) {
   }
 
   // Cover roles are liberal roles not used by any real role this game.
-  const liberalRoleIds = [...ROLE_GROUPS.loyalist, ...ROLE_GROUPS.dissident];
+  // Exclude Rumorist: it's a special dissident role and should not be used as a fascist cover.
+  const liberalRoleIds = [...ROLE_GROUPS.loyalist, ...ROLE_GROUPS.dissident].filter((id) => id !== "Rumorist");
   const coverPool = shuffle(liberalRoleIds.filter((id) => !takenRoleIds.has(String(id))));
 
   /** @type {Record<number, any>} */
@@ -94,6 +107,11 @@ function buildCoverRoleBySeat({ roleBySeat, seatCount }) {
   }
 
   return coverRoleBySeat;
+}
+
+function buildRumoristBelievedRoleIdBySeat({ roleBySeat, coverRoleBySeat, seatCount }) {
+  if (typeof buildRumoristBelievedRoleIdBySeatFromRumoristModule !== "function") return {};
+  return buildRumoristBelievedRoleIdBySeatFromRumoristModule({ roleBySeat, coverRoleBySeat, seatCount });
 }
 
 function assignRolesFor7() {
@@ -169,6 +187,13 @@ function buildPrivateRoleState(seatCount) {
   // Fascists receive a private "cover" liberal role that is not used in this game.
   const coverRoleBySeat = buildCoverRoleBySeat({ roleBySeat, seatCount });
 
+  // Rumorist privately believes they are a Loyalist role.
+  const rumoristBelievedRoleIdBySeat = buildRumoristBelievedRoleIdBySeat({
+    roleBySeat,
+    coverRoleBySeat,
+    seatCount,
+  });
+
   /** @type {Record<number, any>} */
   const cluesBySeat = {};
 
@@ -179,20 +204,81 @@ function buildPrivateRoleState(seatCount) {
     learningRumorsBySeat[s] = roleBySeat?.[s]?.id === "Rumorist";
   }
 
-  // Bureaucrat starting info
+  const ensureClueBucket = (seat) => {
+    const s = Number(seat);
+    if (!Number.isFinite(s) || s <= 0) return null;
+    if (!cluesBySeat[s] || typeof cluesBySeat[s] !== "object") cluesBySeat[s] = {};
+    return cluesBySeat[s];
+  };
+
+  const effectiveRoleIdForSeat = (seat) => {
+    const s = Number(seat);
+    if (!Number.isFinite(s) || s <= 0) return null;
+    const realId = roleBySeat?.[s]?.id ?? null;
+    if (realId !== "Rumorist") return typeof realId === "string" ? realId : null;
+    const believedRaw = rumoristBelievedRoleIdBySeat?.[s] ?? null;
+    const believed = typeof believedRaw === "string" && believedRaw.trim() ? believedRaw.trim() : null;
+    return believed ?? "Rumorist";
+  };
+
+  // Starting clues (private). Rumorist uses the believed role's power.
   for (let s = 1; s <= seatCount; s += 1) {
-    if (roleBySeat[s]?.id === "Bureaucrat") {
-      cluesBySeat[s] = {
-        bureaucratFascistPairs: getBureaucratStartingFascistPairs({
+    const effectiveId = effectiveRoleIdForSeat(s);
+    const learningRumors = learningRumorsBySeat[s] === true;
+    if (!effectiveId) continue;
+
+    if (effectiveId === "Bureaucrat") {
+      const b = ensureClueBucket(s);
+      if (b) {
+        b.bureaucratFascistPairs = getBureaucratStartingFascistPairs({
           roleBySeat,
           seatCount,
-          learningRumors: learningRumorsBySeat[s] === true,
-        }),
-      };
+          learningRumors,
+        });
+      }
+    }
+
+    if (effectiveId === "Inspector") {
+      const clue = getInspectorStartingAgentClue({
+        roleBySeat,
+        seatCount,
+        inspectorSeat: s,
+        learningRumors,
+      });
+      if (clue) {
+        const b = ensureClueBucket(s);
+        if (b) b.inspectorAgentClue = clue;
+      }
+    }
+
+    if (effectiveId === "Vicar") {
+      const clue = getVicarStartingFascistClue({
+        roleBySeat,
+        seatCount,
+        vicarSeat: s,
+        learningRumors,
+      });
+      if (clue) {
+        const b = ensureClueBucket(s);
+        if (b) b.vicarFascistClue = clue;
+      }
     }
   }
 
-  return { roleBySeat, coverRoleBySeat, cluesBySeat, learningRumorsBySeat };
+  // Dictator knows the Rumorist.
+  let dictatorSeat = null;
+  let rumoristSeat = null;
+  for (let s = 1; s <= seatCount; s += 1) {
+    const r = roleBySeat?.[s] ?? null;
+    if (r?.id === "Rumorist" && rumoristSeat == null) rumoristSeat = s;
+    if ((r?.group === "dictator" || r?.id === "Hitler") && dictatorSeat == null) dictatorSeat = s;
+  }
+  if (dictatorSeat != null && rumoristSeat != null) {
+    const b = ensureClueBucket(dictatorSeat);
+    if (b) b.dictatorRumoristSeat = rumoristSeat;
+  }
+
+  return { roleBySeat, coverRoleBySeat, cluesBySeat, learningRumorsBySeat, rumoristBelievedRoleIdBySeat };
 }
 
 module.exports = {
@@ -202,6 +288,7 @@ module.exports = {
   buildRole,
   groupForRoleId,
   buildCoverRoleBySeat,
+  buildRumoristBelievedRoleIdBySeat,
   assignRolesForPlayerCount,
   countAdjacentFascistPairs,
   buildPrivateRoleState,

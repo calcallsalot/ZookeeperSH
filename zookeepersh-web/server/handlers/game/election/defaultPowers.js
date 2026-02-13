@@ -13,6 +13,65 @@ const { getMySeat, isPlayerInLobby, getAliveSeats, isSeatAlive } = require("../g
 const { endGame, scheduleCloseLobby } = require("./winConditions");
 const { nextAlivePresidentSeat, nextPresidentSeatAfterRound } = require("./presidency");
 
+const { buildHarrierDeathPower } = require("../../../game/roles/liberals/loyalists/Harrier");
+const { isPacifistRole, buildPacifistReprisalExecutePower } = require("../../../game/roles/liberals/loyalists/Pacifist");
+const { isGrandmaRole, buildGrandmaReprisalExecutePower } = require("../../../game/roles/fascist/agents/Grandma");
+const { onSeatDiedMaybeKlutz } = require("../../../game/roles/liberals/dissidents/Klutz");
+
+const {
+  ensureSurveyorState,
+  findSurveyorSeat,
+  buildSurveyorPower,
+} = require("../../../game/roles/liberals/loyalists/Surveyor");
+
+const {
+  getGovernorWinIfChancellorCannotBeNominated,
+} = require("../../../game/roles/liberals/loyalists/Governor");
+
+function maybeEndGameForGovernor({ gs, lobbyId, emitGameSystem, closeLobby }) {
+  const win = getGovernorWinIfChancellorCannotBeNominated(gs);
+  if (!win) return false;
+
+  const didEnd = endGame(gs, win.winner, win.reason);
+  if (didEnd) scheduleCloseLobby(gs, closeLobby, lobbyId);
+  if (emitGameSystem) {
+    emitGameSystem(lobbyId, `Game over. ${win.winner === "liberal" ? "Liberals" : "Fascists"} win!`).catch(() => {});
+  }
+  return true;
+}
+
+function maybeStartPendingSurveyorPower({ gs, lobbyId, emitGameSystem }) {
+  if (!gs || typeof gs !== "object") return false;
+  if (gs.phase === "game_over" || gs.gameOver) return false;
+
+  ensureSecretState(gs);
+  ensureSurveyorState(gs);
+
+  const pendingPolicyCount = Number(gs.secret?.surveyor?.pendingPolicyCount ?? 0);
+  if (!Number.isFinite(pendingPolicyCount) || pendingPolicyCount <= 0) return false;
+
+  const seatCount = Array.isArray(gs.players) ? gs.players.length : 0;
+  const surveyorSeat = findSurveyorSeat({ roleBySeat: gs.secret?.roleBySeat ?? null, seatCount });
+  const aliveSeats = getAliveSeats(gs);
+
+  // Clear pending regardless; if Surveyor is dead/missing, nothing happens.
+  gs.secret.surveyor.pendingPolicyCount = 0;
+
+  if (surveyorSeat == null || !aliveSeats.includes(surveyorSeat)) return false;
+
+  const p = buildSurveyorPower({ actorSeat: surveyorSeat, eligibleSeats: aliveSeats, resumePhase: "election_nomination" });
+  if (!p) return false;
+
+  gs.phase = "power_role_pick";
+  gs.power = p;
+
+  if (emitGameSystem) {
+    emitGameSystem(lobbyId, `Seat ${surveyorSeat} must choose 2 players.`).catch(() => {});
+  }
+
+  return true;
+}
+
 function maybeStartFascistBoardPower({ gs, enactedPolicy, eligiblePowerTargets, emitGameSystem, lobbyId }) {
   if (!gs || typeof gs !== "object") return { started: false, systemText: null };
   if (enactedPolicy !== "fascist") return { started: false, systemText: null };
@@ -112,6 +171,16 @@ function registerDefaultPowerHandlers({ io, socket, lobbies, online, playerLobby
       emitGameSystem(lobbyId, `Special election: Seat ${target} is the next President.`).catch(() => {});
     }
 
+    if (maybeEndGameForGovernor({ gs, lobbyId, emitGameSystem, closeLobby })) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    if (maybeStartPendingSurveyorPower({ gs, lobbyId, emitGameSystem })) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 
@@ -174,6 +243,16 @@ function registerDefaultPowerHandlers({ io, socket, lobbies, online, playerLobby
     gs.election.revealed = false;
     gs.election.passed = null;
 
+    if (maybeEndGameForGovernor({ gs, lobbyId, emitGameSystem, closeLobby })) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    if (maybeStartPendingSurveyorPower({ gs, lobbyId, emitGameSystem })) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });
 
@@ -203,6 +282,41 @@ function registerDefaultPowerHandlers({ io, socket, lobbies, online, playerLobby
     if (!Array.isArray(gs.power.eligibleSeats) || !gs.power.eligibleSeats.includes(target)) return;
     if (!isSeatAlive(gs, target)) return;
 
+    ensureSecretState(gs);
+    const targetRole = gs.secret?.roleBySeat?.[target] ?? null;
+    const aliveSeatsBefore = getAliveSeats(gs);
+
+    // Pacifist/Grandma: intercept death -> remain alive + reprisal execute.
+    if (isPacifistRole(targetRole)) {
+      const pwr = buildPacifistReprisalExecutePower(target, aliveSeatsBefore);
+      if (!pwr) return;
+
+      gs.phase = "power_execute";
+      gs.power = pwr;
+
+      if (emitGameSystem) {
+        emitGameSystem(lobbyId, `Seat ${target} survives and must choose a player to die.`).catch(() => {});
+      }
+
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    if (isGrandmaRole(targetRole)) {
+      const pwr = buildGrandmaReprisalExecutePower(target, aliveSeatsBefore);
+      if (!pwr) return;
+
+      gs.phase = "power_execute";
+      gs.power = pwr;
+
+      if (emitGameSystem) {
+        emitGameSystem(lobbyId, `Seat ${target} survives and must choose a player to die.`).catch(() => {});
+      }
+
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
     const p = (gs.players ?? []).find((x) => x.seat === target);
     if (!p) return;
     p.alive = false;
@@ -211,8 +325,7 @@ function registerDefaultPowerHandlers({ io, socket, lobbies, online, playerLobby
       emitGameSystem(lobbyId, `Seat ${target} has been executed.`).catch(() => {});
     }
 
-    ensureSecretState(gs);
-    const killedRole = gs.secret?.roleBySeat?.[target] ?? null;
+    const killedRole = targetRole;
     if (killedRole?.id === "Hitler") {
       gs.power = null;
       const didEnd = endGame(gs, "liberal", "Hitler was executed.");
@@ -223,6 +336,8 @@ function registerDefaultPowerHandlers({ io, socket, lobbies, online, playerLobby
       emitGameState({ io, lobbyId, lobby, playerLobby, online });
       return;
     }
+
+    onSeatDiedMaybeKlutz({ gs, deadSeat: target, now: Date.now() });
 
     gs.power = null;
 
@@ -239,6 +354,35 @@ function registerDefaultPowerHandlers({ io, socket, lobbies, online, playerLobby
 
     gs.election.revealed = false;
     gs.election.passed = null;
+
+    if (maybeEndGameForGovernor({ gs, lobbyId, emitGameSystem, closeLobby })) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
+
+    // Harrier: upon dying, publicly chooses a player and learns their role.
+    if (killedRole?.id === "Harrier") {
+      const harrierPower = buildHarrierDeathPower({
+        actorSeat: target,
+        eligibleSeats: aliveSeats,
+        resumePhase: "election_nomination",
+      });
+
+      if (harrierPower) {
+        gs.phase = "power_role_pick";
+        gs.power = harrierPower;
+        if (emitGameSystem) {
+          emitGameSystem(lobbyId, `Seat ${target} must choose 1 player.`).catch(() => {});
+        }
+        emitGameState({ io, lobbyId, lobby, playerLobby, online });
+        return;
+      }
+    }
+
+    if (maybeStartPendingSurveyorPower({ gs, lobbyId, emitGameSystem })) {
+      emitGameState({ io, lobbyId, lobby, playerLobby, online });
+      return;
+    }
 
     emitGameState({ io, lobbyId, lobby, playerLobby, online });
   });

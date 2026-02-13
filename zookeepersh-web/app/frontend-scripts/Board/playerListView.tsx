@@ -365,6 +365,22 @@ function AvatarTile({
   exileEnabled,
   eligibleExileSeats,
   onExile,
+
+  fishermanEnabled,
+  onFisherman,
+
+  organizerEnabled,
+  onOrganizer,
+
+  powerMode,
+
+  viewerSeat,
+  usherEnabled,
+  onUsher,
+  insurrectionaryEnabled,
+  onInsurrectionary,
+  nobleEnabled,
+  onNoble,
 }: {
   seat: number;
   name: string;
@@ -403,6 +419,22 @@ function AvatarTile({
   exileEnabled?: boolean;
   eligibleExileSeats?: number[];
   onExile?: (seat: number) => void;
+
+  fishermanEnabled?: boolean;
+  onFisherman?: (seat: number) => void;
+
+  organizerEnabled?: boolean;
+  onOrganizer?: (seat: number) => void;
+
+  powerMode?: boolean;
+
+  viewerSeat?: number;
+  usherEnabled?: boolean;
+  onUsher?: (seat: number) => void;
+  insurrectionaryEnabled?: boolean;
+  onInsurrectionary?: (seat: number) => void;
+  nobleEnabled?: boolean;
+  onNoble?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
@@ -414,7 +446,7 @@ function AvatarTile({
   const backSrc = isDead ? undefined : isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
   const action =
-    !isDead && rolePickEnabled && onRolePick && eligibleRolePickSeats?.includes(seat) === true
+    rolePickEnabled && onRolePick && eligibleRolePickSeats?.includes(seat) === true
       ? ("role_pick" as const)
       : !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
       ? ("execute" as const)
@@ -465,6 +497,46 @@ function AvatarTile({
     exileEnabled &&
     onExile &&
     eligibleExileSeats?.includes(seat) === true;
+
+  const canFish = Boolean(powerMode && isDead && fishermanEnabled && onFisherman);
+  const canOrganize = Boolean(
+    powerMode &&
+      !isDead &&
+      organizerEnabled &&
+      onOrganizer &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
+
+  const canUsher = Boolean(
+    powerMode &&
+      !isDead &&
+      usherEnabled &&
+      onUsher &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
+
+  const canInsurrectionary = Boolean(
+    powerMode &&
+      !isDead &&
+      insurrectionaryEnabled &&
+      onInsurrectionary &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
+  const canNoble = Boolean(
+    powerMode &&
+      !isDead &&
+      nobleEnabled &&
+      onNoble &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
 
   return (
     <div style={{ width: 86 }}>
@@ -531,7 +603,7 @@ function AvatarTile({
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
 
-      {!exileEnabled && isExiled ? (
+      {isExiled ? (
         <div
           style={{
             width: "100%",
@@ -554,7 +626,7 @@ function AvatarTile({
         </div>
       ) : null}
 
-      {exileEnabled ? (
+      {canExile ? (
         <button
           type="button"
           onClick={() => onExile?.(seat)}
@@ -575,6 +647,121 @@ function AvatarTile({
           }}
         >
           {isExiled ? "Exiled" : "Exile"}
+        </button>
+      ) : null}
+
+      {canFish ? (
+        <button
+          type="button"
+          onClick={() => onFisherman?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(46, 204, 113, 0.40)",
+            background: "rgba(46, 204, 113, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Fisherman
+        </button>
+      ) : null}
+
+      {canOrganize ? (
+        <button
+          type="button"
+          onClick={() => onOrganizer?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(77, 163, 255, 0.40)",
+            background: "rgba(77, 163, 255, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Organizer
+        </button>
+      ) : null}
+
+      {canUsher ? (
+        <button
+          type="button"
+          onClick={() => onUsher?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(34, 211, 238, 0.40)",
+            background: "rgba(34, 211, 238, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Usher
+        </button>
+      ) : null}
+
+      {canInsurrectionary ? (
+        <button
+          type="button"
+          onClick={() => onInsurrectionary?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(245, 158, 11, 0.42)",
+            background: "rgba(245, 158, 11, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: 0.2,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Insurrectionary
+        </button>
+      ) : null}
+
+      {canNoble ? (
+        <button
+          type="button"
+          onClick={() => onNoble?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(255, 77, 77, 0.40)",
+            background: "rgba(255, 77, 77, 0.14)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Noble
         </button>
       ) : null}
     </div>
@@ -658,6 +845,22 @@ function CardTile({
   rolePickEnabled,
   eligibleRolePickSeats,
   onRolePick,
+
+  fishermanEnabled,
+  onFisherman,
+
+  organizerEnabled,
+  onOrganizer,
+
+  powerMode,
+
+  viewerSeat,
+  usherEnabled,
+  onUsher,
+  insurrectionaryEnabled,
+  onInsurrectionary,
+  nobleEnabled,
+  onNoble,
 }: {
   seat: number;
   name: string;
@@ -697,6 +900,22 @@ function CardTile({
   rolePickEnabled?: boolean;
   eligibleRolePickSeats?: number[];
   onRolePick?: (seat: number) => void;
+
+  fishermanEnabled?: boolean;
+  onFisherman?: (seat: number) => void;
+
+  organizerEnabled?: boolean;
+  onOrganizer?: (seat: number) => void;
+
+  powerMode?: boolean;
+
+  viewerSeat?: number;
+  usherEnabled?: boolean;
+  onUsher?: (seat: number) => void;
+  insurrectionaryEnabled?: boolean;
+  onInsurrectionary?: (seat: number) => void;
+  nobleEnabled?: boolean;
+  onNoble?: (seat: number) => void;
 }) {
   const electionSrc = electionBackSrc(electionPhase, electionVote);
   const isVoting = electionPhase === "election_voting";
@@ -708,7 +927,7 @@ function CardTile({
   const backSrc = isDead ? undefined : isReveal ? (electionSrc ?? ELECTION_BALLOT) : undefined;
 
   const action =
-    !isDead && rolePickEnabled && onRolePick && eligibleRolePickSeats?.includes(seat) === true
+    rolePickEnabled && onRolePick && eligibleRolePickSeats?.includes(seat) === true
       ? ("role_pick" as const)
       : !isDead && executeEnabled && onExecute && eligibleExecuteSeats?.includes(seat) === true
       ? ("execute" as const)
@@ -759,6 +978,46 @@ function CardTile({
     exileEnabled &&
     onExile &&
     eligibleExileSeats?.includes(seat) === true;
+
+  const canFish = Boolean(powerMode && isDead && fishermanEnabled && onFisherman);
+  const canOrganize = Boolean(
+    powerMode &&
+      !isDead &&
+      organizerEnabled &&
+      onOrganizer &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
+
+  const canInsurrectionary = Boolean(
+    powerMode &&
+      !isDead &&
+      insurrectionaryEnabled &&
+      onInsurrectionary &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
+
+  const canUsher = Boolean(
+    powerMode &&
+      !isDead &&
+      usherEnabled &&
+      onUsher &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
+  const canNoble = Boolean(
+    powerMode &&
+      !isDead &&
+      nobleEnabled &&
+      onNoble &&
+      typeof viewerSeat === "number" &&
+      Number.isFinite(viewerSeat) &&
+      seat !== viewerSeat
+  );
 
   return (
     <div style={{ width: 86 }}>
@@ -825,7 +1084,7 @@ function CardTile({
         <RoleBadges isPresident={isPresident} isChancellor={isChancellor} />
       </ClickableCardWrap>
 
-      {!exileEnabled && isExiled ? (
+      {isExiled ? (
         <div
           style={{
             width: "100%",
@@ -848,7 +1107,7 @@ function CardTile({
         </div>
       ) : null}
 
-      {exileEnabled ? (
+      {canExile ? (
         <button
           type="button"
           onClick={() => onExile?.(seat)}
@@ -869,6 +1128,121 @@ function CardTile({
           }}
         >
           {isExiled ? "Exiled" : "Exile"}
+        </button>
+      ) : null}
+
+      {canFish ? (
+        <button
+          type="button"
+          onClick={() => onFisherman?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(46, 204, 113, 0.40)",
+            background: "rgba(46, 204, 113, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Fisherman
+        </button>
+      ) : null}
+
+      {canOrganize ? (
+        <button
+          type="button"
+          onClick={() => onOrganizer?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(77, 163, 255, 0.40)",
+            background: "rgba(77, 163, 255, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Organizer
+        </button>
+      ) : null}
+
+      {canUsher ? (
+        <button
+          type="button"
+          onClick={() => onUsher?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(34, 211, 238, 0.40)",
+            background: "rgba(34, 211, 238, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Usher
+        </button>
+      ) : null}
+
+      {canInsurrectionary ? (
+        <button
+          type="button"
+          onClick={() => onInsurrectionary?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(245, 158, 11, 0.42)",
+            background: "rgba(245, 158, 11, 0.16)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: 0.2,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Insurrectionary
+        </button>
+      ) : null}
+
+      {canNoble ? (
+        <button
+          type="button"
+          onClick={() => onNoble?.(seat)}
+          style={{
+            width: "100%",
+            marginTop: 6,
+            height: 22,
+            borderRadius: 8,
+            border: "1px solid rgba(255, 77, 77, 0.40)",
+            background: "rgba(255, 77, 77, 0.14)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: 0.4,
+            fontFamily: "var(--font-comfortaa)",
+            cursor: "pointer",
+          }}
+        >
+          Noble
         </button>
       ) : null}
     </div>
@@ -900,6 +1274,23 @@ export default function PlayerListView({
   exileEnabled,
   eligibleExileSeats,
   onExile,
+
+  fishermanEnabled,
+  onFisherman,
+
+  organizerEnabled,
+  onOrganizer,
+
+  powerMode,
+
+  usherEnabled,
+  onUsher,
+
+  insurrectionaryEnabled,
+  onInsurrectionary,
+
+  nobleEnabled,
+  onNoble,
 
   // nomination
   nominateEnabled,
@@ -948,6 +1339,23 @@ export default function PlayerListView({
   exileEnabled?: boolean;
   eligibleExileSeats?: number[];
   onExile?: (seat: number) => void;
+
+  fishermanEnabled?: boolean;
+  onFisherman?: (seat: number) => void;
+
+  organizerEnabled?: boolean;
+  onOrganizer?: (seat: number) => void;
+
+  powerMode?: boolean;
+
+  usherEnabled?: boolean;
+  onUsher?: (seat: number) => void;
+
+  insurrectionaryEnabled?: boolean;
+  onInsurrectionary?: (seat: number) => void;
+
+  nobleEnabled?: boolean;
+  onNoble?: (seat: number) => void;
 
   nominateEnabled?: boolean;
   onNominateChancellor?: (seat: number) => void;
@@ -1013,6 +1421,26 @@ export default function PlayerListView({
     onRolePick?.(seat);
   };
 
+  const handleFisherman = (seat: number) => {
+    onFisherman?.(seat);
+  };
+
+  const handleOrganizer = (seat: number) => {
+    onOrganizer?.(seat);
+  };
+
+  const handleUsher = (seat: number) => {
+    onUsher?.(seat);
+  };
+
+  const handleInsurrectionary = (seat: number) => {
+    onInsurrectionary?.(seat);
+  };
+
+  const handleNoble = (seat: number) => {
+    onNoble?.(seat);
+  };
+
   if (clamped === 7) {
     return (
       <div style={containerStyle}>
@@ -1034,9 +1462,25 @@ export default function PlayerListView({
               electionPhase={electionPhase}
               electionVote={electionVotes?.[seat] ?? null}
               hasVoted={electionVoteCast?.[seat] === true}
-              exileEnabled={Boolean(exileEnabled && mySeat === seat)}
+              exileEnabled={Boolean(exileEnabled)}
               eligibleExileSeats={eligibleExileSeats}
               onExile={handleExile}
+
+              fishermanEnabled={Boolean(fishermanEnabled)}
+              onFisherman={handleFisherman}
+
+              organizerEnabled={Boolean(organizerEnabled)}
+              onOrganizer={handleOrganizer}
+
+              powerMode={Boolean(powerMode)}
+
+              viewerSeat={mySeat}
+              usherEnabled={Boolean(usherEnabled)}
+              onUsher={handleUsher}
+              insurrectionaryEnabled={Boolean(insurrectionaryEnabled)}
+              onInsurrectionary={handleInsurrectionary}
+              nobleEnabled={Boolean(nobleEnabled)}
+              onNoble={handleNoble}
               nominateEnabled={Boolean(nominateEnabled)}
               eligibleChancellorSeats={eligibleChancellorSeats}
               onNominate={handleNominate}
@@ -1080,9 +1524,25 @@ export default function PlayerListView({
             electionPhase={electionPhase}
             electionVote={electionVotes?.[seat] ?? null}
             hasVoted={electionVoteCast?.[seat] === true}
-            exileEnabled={Boolean(exileEnabled && mySeat === seat)}
+            exileEnabled={Boolean(exileEnabled)}
             eligibleExileSeats={eligibleExileSeats}
             onExile={handleExile}
+
+            fishermanEnabled={Boolean(fishermanEnabled)}
+            onFisherman={handleFisherman}
+
+            organizerEnabled={Boolean(organizerEnabled)}
+            onOrganizer={handleOrganizer}
+
+            powerMode={Boolean(powerMode)}
+
+            viewerSeat={mySeat}
+            usherEnabled={Boolean(usherEnabled)}
+            onUsher={handleUsher}
+            insurrectionaryEnabled={Boolean(insurrectionaryEnabled)}
+            onInsurrectionary={handleInsurrectionary}
+            nobleEnabled={Boolean(nobleEnabled)}
+            onNoble={handleNoble}
             nominateEnabled={Boolean(nominateEnabled)}
             eligibleChancellorSeats={eligibleChancellorSeats}
             onNominate={handleNominate}

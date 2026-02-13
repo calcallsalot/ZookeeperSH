@@ -6,6 +6,7 @@ import ClaimCardsModal, { type ClaimCardsModalMode } from "../../../frontend-scr
 import ClaimInvestigationResultModal, {
   type InvestigationResultClaim,
 } from "../../../frontend-scripts/game/ClaimInvestigationResultModal";
+import GrandmaRegisterAsModal from "../../../frontend-scripts/game/GrandmaRegisterAsModal";
 
 function nameColorFromElo(elo?: number | null) {
   if (elo == null) return "rgba(255,255,255,0.9)";
@@ -122,6 +123,8 @@ export default function GameChatBar({
   myCoverRole,
   myClues,
   myLastInvestigation,
+  powerMode,
+  onTogglePowerMode,
 }: {
   lobbyId: string;
   gameStarted: boolean;
@@ -144,7 +147,22 @@ export default function GameChatBar({
     | null;
   myRole?: { id: string; color?: string; description?: string | null } | null;
   myCoverRole?: { id: string; color?: string; description?: string | null } | null;
-  myClues?: { bureaucratFascistPairs?: number | null } | null;
+  myClues?: {
+    // Bureaucrat
+    bureaucratFascistPairs?: number | null;
+
+    // Inspector
+    inspectorAgentRoleId?: string | null;
+    inspectorCandidateSeats?: Array<number | string> | null;
+    inspectorAgentClue?: { agentRoleId?: string | null; candidateSeats?: Array<number | string> | null } | null;
+
+    // Vicar
+    vicarCandidateSeats?: Array<number | string> | null;
+    vicarFascistClue?: { candidateSeats?: Array<number | string> | null } | null;
+
+    // Dictator
+    dictatorRumoristSeat?: number | null;
+  } | null;
   myLastInvestigation?:
     | {
         ts?: number;
@@ -161,9 +179,11 @@ export default function GameChatBar({
         } | null;
       }
     | null;
+
+  powerMode?: boolean;
+  onTogglePowerMode?: () => void;
 }) {
-  const { connected, canChat, gameChatMessages, joinGameChat, sendGameChat } =
-    useLobby() as any;
+  const { connected, canChat, gameChatMessages, joinGameChat, sendGameChat, socket } = useLobby() as any;
 
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -175,6 +195,8 @@ export default function GameChatBar({
   const [claimInvOpen, setClaimInvOpen] = useState(false);
   const [claimedInvKey, setClaimedInvKey] = useState<string | null>(null);
   const [localNotices, setLocalNotices] = useState<any[]>([]);
+
+  const [grandmaRegisterOpen, setGrandmaRegisterOpen] = useState(false);
 
   const claimGovKey = useMemo(() => {
     const pres = claimCards?.presidentSeat;
@@ -200,6 +222,7 @@ export default function GameChatBar({
 
   useEffect(() => {
     setLocalNotices([]);
+    setGrandmaRegisterOpen(false);
   }, [lobbyId]);
 
   const pushNotice = (noticeText: string) => {
@@ -233,6 +256,23 @@ export default function GameChatBar({
   const localSystem = useMemo(() => {
     /** @type {any[]} */
     const out = [];
+
+    const normalizeSeatList = (raw: any): number[] => {
+      const list = Array.isArray(raw) ? raw : [];
+      const out: number[] = [];
+      const seen = new Set<number>();
+      for (const x of list) {
+        const n = Number(x);
+        if (!Number.isFinite(n)) continue;
+        const s = Math.trunc(n);
+        if (s <= 0) continue;
+        if (seen.has(s)) continue;
+        seen.add(s);
+        out.push(s);
+      }
+      out.sort((a, b) => a - b);
+      return out;
+    };
 
      const getTeamFromInvestigation = (inv: any): "liberal" | "fascist" | null => {
        const kind = inv?.result?.kind;
@@ -291,6 +331,72 @@ export default function GameChatBar({
       });
     }
 
+    // Inspector starting clue (private): one of 3 seats is a specific Agent.
+    const inspectorClue =
+      myClues?.inspectorAgentClue ??
+      (myClues?.inspectorAgentRoleId || myClues?.inspectorCandidateSeats
+        ? {
+            agentRoleId: myClues?.inspectorAgentRoleId ?? null,
+            candidateSeats: myClues?.inspectorCandidateSeats ?? null,
+          }
+        : null);
+    const inspectorAgentRoleId =
+      typeof inspectorClue?.agentRoleId === "string" && inspectorClue.agentRoleId.trim()
+        ? inspectorClue.agentRoleId.trim()
+        : null;
+    const inspectorSeats = normalizeSeatList(inspectorClue?.candidateSeats).slice(0, 3);
+    if (gameStarted && myRole?.id === "Inspector" && inspectorAgentRoleId && inspectorSeats.length === 3) {
+      out.push({
+        id: `local:clue:inspector:${lobbyId}`,
+        lobbyId,
+        kind: "system",
+        ts: 0,
+        content: (
+          <span>
+            Inspector info: Exactly one of seats <span style={{ fontWeight: 900 }}>{inspectorSeats.join(", ")}</span> is the Agent{" "}
+            <span style={{ fontWeight: 900 }}>{inspectorAgentRoleId}</span>.
+          </span>
+        ),
+      });
+    }
+
+    // Vicar starting clue (private): exactly one of 3 seats is fascist.
+    const vicarClue =
+      myClues?.vicarFascistClue ??
+      (myClues?.vicarCandidateSeats ? { candidateSeats: myClues.vicarCandidateSeats } : null);
+    const vicarSeats = normalizeSeatList(vicarClue?.candidateSeats).slice(0, 3);
+    if (gameStarted && myRole?.id === "Vicar" && vicarSeats.length === 3) {
+      out.push({
+        id: `local:clue:vicar:${lobbyId}`,
+        lobbyId,
+        kind: "system",
+        ts: 0,
+        content: (
+          <span>
+            Vicar info: Exactly one of seats <span style={{ fontWeight: 900 }}>{vicarSeats.join(", ")}</span> is fascist.
+          </span>
+        ),
+      });
+    }
+
+    // Dictator info (private): knows the Rumorist.
+    const rumorSeatRaw = myClues?.dictatorRumoristSeat;
+    const rumorSeat = typeof rumorSeatRaw === "number" && Number.isFinite(rumorSeatRaw) ? rumorSeatRaw : null;
+    if (gameStarted && myRole?.id === "Hitler" && rumorSeat != null) {
+      out.push({
+        id: `local:clue:dictator-rumorist:${lobbyId}`,
+        lobbyId,
+        kind: "system",
+        ts: 0,
+        content: (
+          <span>
+            Dictator info: Seat <span style={{ fontWeight: 900 }}>{rumorSeat}</span> is the{" "}
+            <span style={{ fontWeight: 900 }}>Rumorist</span>.
+          </span>
+        ),
+      });
+    }
+
     const invResult = myLastInvestigation?.result as any;
     if (gameStarted && invResult?.kind === "text" && typeof invResult?.text === "string" && invResult.text.trim()) {
       const ts = typeof myLastInvestigation?.ts === "number" ? myLastInvestigation.ts : Date.now();
@@ -335,7 +441,13 @@ export default function GameChatBar({
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [viewMessages.length]);
 
-  const disabled = !connected || !canChat || myAlive === false || claimCardsOpen || claimInvOpen;
+  const disabled =
+    !connected ||
+    !canChat ||
+    myAlive === false ||
+    claimCardsOpen ||
+    claimInvOpen ||
+    grandmaRegisterOpen;
 
   const onSend = () => {
     const msg = text.trim();
@@ -345,6 +457,44 @@ export default function GameChatBar({
     const cmd = String(parts[0] ?? "").toLowerCase();
     const type = String(parts[1] ?? "").toLowerCase();
     const rest = parts.slice(2).join(" ").trim();
+
+     // UI helper: typing `/power` toggles local power targeting.
+     if (cmd === "/power") {
+       if (type === "help") {
+         pushNotice(["Power command:", "- /power  (toggle power targeting UI)", "- /power help"].join("\n"));
+         setText("");
+         return;
+       }
+
+       const myRoleId = myRole?.id ?? null;
+       const myCoverRoleId = myCoverRole?.id ?? null;
+       const allowed =
+         myRoleId === "Usher" ||
+         myRoleId === "Noble" ||
+         myRoleId === "Insurrectionary" ||
+         myRoleId === "Organizer" ||
+         myCoverRoleId === "Organizer" ||
+         myRoleId === "Fisherman" ||
+         myCoverRoleId === "Fisherman";
+
+       if (!allowed) {
+         pushNotice("You cannot use /power.");
+         setText("");
+         return;
+       }
+
+       if (!onTogglePowerMode) {
+         pushNotice("Power UI unavailable.");
+         setText("");
+         return;
+       }
+
+       const next = !(powerMode === true);
+       onTogglePowerMode();
+       pushNotice(next ? "Power mode enabled. Choose a player." : "Power mode disabled.");
+       setText("");
+       return;
+     }
 
     // UI helper: typing `/claim cards` opens a picker for the last government.
     if (cmd === "/claim" && type === "cards" && rest.length === 0) {
@@ -474,6 +624,28 @@ export default function GameChatBar({
           background: "rgba(0,0,0,0.25)",
         }}
       >
+        {gameStarted && myRole?.id === "Grandma" ? (
+          <button
+            type="button"
+            onClick={() => setGrandmaRegisterOpen(true)}
+            disabled={!connected || myAlive === false}
+            style={{
+              height: 34,
+              padding: "0 10px",
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: !connected || myAlive === false ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.14)",
+              color: "rgba(255,255,255,0.92)",
+              fontWeight: 900,
+              cursor: !connected || myAlive === false ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+            title="Grandma: register as a Liberal role"
+          >
+            Register
+          </button>
+        ) : null}
+
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -537,6 +709,18 @@ export default function GameChatBar({
           sendGameChat?.(lobbyId, `/claim inv ${result}`);
           setClaimInvOpen(false);
           setText("");
+        }}
+      />
+
+      <GrandmaRegisterAsModal
+        open={grandmaRegisterOpen}
+        onClose={() => setGrandmaRegisterOpen(false)}
+        onSubmit={(registerAsRoleId) => {
+          socket?.emit?.("game:power:grandmaRegisterAs", {
+            lobbyId,
+            registerAsRoleId,
+          });
+          setGrandmaRegisterOpen(false);
         }}
       />
     </section>

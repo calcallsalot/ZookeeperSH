@@ -2,6 +2,8 @@ const { ensureGameState, emitGameState } = require("../gameState");
 const { getMySeat, isPlayerInLobby, getAliveSeats, isSeatAlive } = require("../guards");
 const { scheduleElectionRevealAutoAdvance } = require("./autoAdvance");
 
+const { coerceVoteWithUsher } = require("../../../game/roles/liberals/dissidents/Usher");
+
 function registerVotingHandlers({ io, socket, lobbies, online, playerLobby, emitGameSystem, closeLobby }) {
   socket.on("game:castVote", ({ lobbyId, vote } = {}) => {
     if (typeof lobbyId !== "string") return;
@@ -28,7 +30,10 @@ function registerVotingHandlers({ io, socket, lobbies, online, playerLobby, emit
     const v = vote === "ja" ? "ja" : vote === "nein" ? "nein" : null;
     if (!v) return;
 
-    gs.election.votes[mySeat] = v;
+    const { vote: finalVote } = coerceVoteWithUsher({ gs, voterSeat: mySeat, requestedVote: v });
+    if (!finalVote) return;
+
+    gs.election.votes[mySeat] = finalVote;
 
     const aliveSeats = getAliveSeats(gs);
     const allIn = aliveSeats.every((s) => gs.election.votes[s] != null);

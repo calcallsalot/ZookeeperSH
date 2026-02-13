@@ -1,4 +1,6 @@
 
+const { getRoleIdForRoleReveal } = require("../../fascist/agents/Grandma");
+
 function listUniqueRoleIds({ roleBySeat, seatCount }) {
   const n = Number(seatCount ?? 0);
   if (!Number.isFinite(n) || n <= 0) return [];
@@ -24,7 +26,7 @@ function rumorizeRoleId({ truthRoleId, roleBySeat, seatCount }) {
 }
 
 function getHarrierLearnedRoleId({ targetRole, roleBySeat, seatCount, learningRumors }) {
-  const truth = typeof targetRole?.id === "string" && targetRole.id.trim() ? targetRole.id : null;
+  const truth = getRoleIdForRoleReveal(targetRole);
   if (!truth) return null;
   if (!learningRumors) return truth;
   return rumorizeRoleId({ truthRoleId: truth, roleBySeat, seatCount });

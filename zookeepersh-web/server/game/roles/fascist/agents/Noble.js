@@ -36,10 +36,20 @@ function playerBySeat(gs, seat) {
   return players.find((p) => p?.seat === s) ?? null;
 }
 
+function isSeatAlive(gs, seat) {
+  const p = playerBySeat(gs, seat);
+  return p?.alive !== false;
+}
+
 function getDeckNumberFromGameState(gs, deckNumberOverride) {
   const raw = deckNumberOverride ?? gs?.policyDeckMeta?.deckNumber;
   const n = Number(raw ?? 1);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 1;
+}
+
+function getFailedElectionsFromGameState(gs) {
+  const n = Number(gs?.election?.failedElections ?? 0);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
 function ensureNobleState(gs) {
@@ -67,10 +77,14 @@ function canUseNoblePick({ gs, actorSeat, targetSeat, deckNumber }) {
   if (!gs || typeof gs !== "object") return { ok: false, reason: "invalid_game_state" };
   if (gs.phase === "game_over" || gs.gameOver) return { ok: false, reason: "game_over" };
 
+  // Noble is only available in nomination to avoid disrupting an in-progress election.
+  if (gs.phase !== "election_nomination") return { ok: false, reason: "wrong_phase" };
+
   const actor = Number(actorSeat);
   if (!Number.isFinite(actor)) return { ok: false, reason: "invalid_actor_seat" };
   const target = Number(targetSeat);
   if (!Number.isFinite(target)) return { ok: false, reason: "invalid_target_seat" };
+  if (target === actor) return { ok: false, reason: "cannot_target_self" };
 
   const actorPlayer = playerBySeat(gs, actor);
   if (!actorPlayer) return { ok: false, reason: "unknown_actor_seat" };
@@ -88,6 +102,11 @@ function canUseNoblePick({ gs, actorSeat, targetSeat, deckNumber }) {
 
   ensureNobleState(gs);
   const deck = getDeckNumberFromGameState(gs, deckNumber);
+  if (deck < 2) return { ok: false, reason: "not_unlocked_yet" };
+
+  const failedElections = getFailedElectionsFromGameState(gs);
+  if (failedElections < 2) return { ok: false, reason: "not_ready" };
+
   const lastUsed = Number(secret?.noble?.lastUsedDeckBySeat?.[actor] ?? 0);
   if (Number.isFinite(lastUsed) && lastUsed === deck) return { ok: false, reason: "already_used_this_deck" };
 
@@ -104,11 +123,6 @@ function useNoblePick({ gs, actorSeat, targetSeat, deckNumber }) {
 
   ensureNobleState(gs);
   gs.secret.noble.lastUsedDeckBySeat[actor] = deck;
-  gs.secret.noble.selectionBySeat[actor] = {
-    deckNumber: deck,
-    targetSeat: target,
-    triggered: false,
-  };
 
   return {
     ok: true,
@@ -196,6 +210,50 @@ function clearNobleSelectionsOnReshuffle({ gs }) {
   gs.secret.noble.selectionBySeat = {};
 }
 
+function needsNoblePickForCurrentDeck({ gs, nobleSeat }) {
+  if (!gs || typeof gs !== "object") return false;
+  if (!gs.secret || typeof gs.secret !== "object") return false;
+
+  if (gs.phase === "game_over" || gs.gameOver) return false;
+  if (gs.phase !== "election_nomination") return false;
+
+  const seat = Number(nobleSeat);
+  if (!Number.isFinite(seat) || seat <= 0) return false;
+  if (!isSeatAlive(gs, seat)) return false;
+
+  if (!isNobleRole(gs.secret?.roleBySeat?.[seat] ?? null)) return false;
+
+  ensureNobleState(gs);
+  const deck = getDeckNumberFromGameState(gs);
+  if (deck < 2) return false;
+
+  const failedElections = getFailedElectionsFromGameState(gs);
+  if (failedElections < 2) return false;
+
+  const lastUsed = Number(gs.secret?.noble?.lastUsedDeckBySeat?.[seat] ?? 0);
+  return !(Number.isFinite(lastUsed) && lastUsed === deck);
+}
+
+function buildNobleDeckPickPower({ actorSeat, eligibleSeats, resumePhase }) {
+  const s = Number(actorSeat);
+  if (!Number.isFinite(s)) return null;
+
+  const seats = Array.isArray(eligibleSeats)
+    ? eligibleSeats.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
+    : [];
+  seats.sort((a, b) => a - b);
+
+  return {
+    type: "role_pick",
+    kind: "noble",
+    actorSeat: s,
+    pickCount: 1,
+    pickedSeats: [],
+    eligibleSeats: seats,
+    resumePhase: typeof resumePhase === "string" && resumePhase ? resumePhase : "election_nomination",
+  };
+}
+
 module.exports = {
   isNobleRole,
   inferSeatCount,
@@ -207,4 +265,6 @@ module.exports = {
   listNobleVictimSeats,
   applyNobleDeaths,
   clearNobleSelectionsOnReshuffle,
+  needsNoblePickForCurrentDeck,
+  buildNobleDeckPickPower,
 };
